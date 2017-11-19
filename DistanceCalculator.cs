@@ -27,6 +27,9 @@ namespace EquivalentExchange
         {
             double RecursionMethod(GameLocation location, double dist)
             {
+                // We check if this location is already actively being pathed through in the active query, and return double.MaxValue if that is the case
+                if (_Active.Contains(startLocation.Name))
+                    return double.MaxValue;
                 // We set ourselves as active to prevent infinite recursion
                 _Active.Add(location.Name);
                 // Check if this is a leveled location
@@ -95,16 +98,9 @@ namespace EquivalentExchange
                 _Active.Remove(location.Name);
                 // We add the result for this location to the cache only if its parent distance is 0 (This is the location being checked)
                 if (dist == 0)
-                {
                     _Cache.Add(location.Name, mdist);
-                    return mdist;
-                }
-                else
-                    return double.MaxValue;
+                return mdist;
             }
-            // We check if this location is already actively being pathed through in the active query, and return double.MaxValue if that is the case
-            if (_Active.Contains(startLocation.Name))
-                return double.MaxValue;
             // We only calculate path distance if we havent done so already for this location (Unless it is leveled, then we always recalculate)
             if (!_Cache.ContainsKey(startLocation.Name))
                 return RecursionMethod(startLocation, 0);
