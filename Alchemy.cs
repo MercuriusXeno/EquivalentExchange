@@ -28,6 +28,7 @@ namespace EquivalentExchange
         public const double skillFreeTransmuteImpact = 0.03D;
         public const double maxDistanceFactor = 10D;
         public const double distanceBonusForLuckFactorNormalization = (200D / 3D);
+        public const double mapDistanceFactor = 0.05D;
 
         //default experience progression values that I'm gonna try to balance around, somehow.
         public static readonly int[] alchemyExperienceNeededPerLevel = new int[] { 100, 380, 770, 1300, 2150, 3300, 4800, 6900, 10000, 15000 };
@@ -89,9 +90,22 @@ namespace EquivalentExchange
 
         //the chance a player will fail to transmute/liquidate an item
         public static double GetReboundChance()
-        {            
-            double distanceFactor = Math.Max(0D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation) - EquivalentExchange.instance.currentPlayerData.AlchemyLevel);            
+        {
+            double distance = DistanceCalculator.GetPathDistance(Game1.player.currentLocation);
+            if (distance == double.MaxValue)
+            {
+                distance = 5; //a middling distance value is subbed in when the distance can't be calculated by the algorithm for whatever reason.
+            }
+
+            //the distance factor is whatever the raw distance is minus the player's alchemy level, which reduces the impact of distance from leylines to rebounds
+            double distanceFactor = Math.Max(0D, distance - EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
+
+            //normalize distance factor - each map adds roughly 5% rebound, so dividing by 20D is what we're going for.
+            distanceFactor /= (1 / mapDistanceFactor);
+
+            //calculate luck's impact on rebound
             double luckFactor = (Game1.player.LuckLevel * luckReboundImpact) + Game1.dailyLuck;
+
             return Math.Max(0, (baseReboundRate + distanceFactor) - luckFactor);
         }
 
