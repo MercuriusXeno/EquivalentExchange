@@ -1,4 +1,5 @@
 ﻿using System;
+using Harmony;
 using System.Collections.Generic;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
@@ -7,6 +8,7 @@ using System.Linq;
 using Microsoft.Xna.Framework.Input;
 
 using EquivalentExchange.Models;
+using EquivalentExchange.Events;
 using System.IO;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework;
@@ -68,7 +70,199 @@ namespace EquivalentExchange
             //we need this to save our alchemists['] data
             SaveEvents.BeforeSave += SaveEvents_BeforeSave;
 
+            //set texture files in memory, they're tiny things.
             HandleTextureCaching();
+
+            //wire up the overnight event that I stole from spacechase0 and it probably won't work because I'm dumb and he's smart.
+            //this is intended to trigger the leveling menu.
+            OvernightEvent.ShowOvernightEventMenu += OvernightEvent_ShowOvernightEventMenu;
+
+            //check for experience bars mod: if it's here we draw hud elements for the new alchemy skill
+            CheckForExperienceBarsMod();
+            if (hasExperienceBarsMod)
+            {
+                GraphicsEvents.OnPostRenderHudEvent += GraphicsEvents_OnPostRenderHudEvent;
+            }
+
+            //check for all professions mod: if it's here we run a wireup to give the player all skills professions at the right time, when present.
+            CheckForAllProfessionsMod();
+
+            if (hasAllProfessionsMod)
+            {
+                LocationEvents.CurrentLocationChanged += LocationEvents_CurrentLocationChanged; ;
+            }            
+        }
+
+        public List<int> showLevelUpMenusByRank = new List<int>();
+
+        internal void AddSkillUpMenuAppearance(int alchemyLevel)
+        {
+            showLevelUpMenusByRank.Add(alchemyLevel);
+        }
+
+        private void OvernightEvent_ShowOvernightEventMenu(object sender, EventArgsOvernightEvent e)
+        {
+            ShowEndOfNightLevelMenu();
+        }
+
+        private void ShowEndOfNightLevelMenu()
+        {
+            //used to figure out which player we need to load, in this pretend-multiplayer setup we've got so far.
+            long playerID = GetCurrentPlayerID();
+
+            //linq seek the player in question, get the player's save data. We're gonna pass this AlchemistFarmer around.
+            AlchemistFarmer player = playerList.Where(p => p.uniqueMultiplayerID == playerID).FirstOrDefault();
+
+            if (showLevelUpMenusByRank.Count() > 0)
+            {
+                for (int i = showLevelUpMenusByRank.Count() - 1; i >= 0; --i)
+                {
+                    int level = showLevelUpMenusByRank[i];
+
+                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(player, level));
+                }
+                showLevelUpMenusByRank.Clear();
+            }
+            else if (player.playerSaveData.AlchemyLevel >= 5 && !player.playerSaveData.HasShaperProfession && !player.playerSaveData.HasSageProfession)
+            {
+                Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(player, 5));
+            }
+            else if (player.playerSaveData.AlchemyLevel >= 10 && !player.playerSaveData.HasTransmuterProfession && !player.playerSaveData.HasAdeptProfession && !player.playerSaveData.HasAurumancerProfession && !player.playerSaveData.HasConduitProfession)
+            {            
+                Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(player, 10));
+            }
+        }
+
+        //misleading event wireup is actually for the has-all-professions mod, which enables all professions at the appropriate level.
+        private void LocationEvents_CurrentLocationChanged(object sender, EventArgsCurrentLocationChanged e)
+        {
+            if (hasAllProfessionsMod)
+            {
+                //used to figure out which player we need to load, in this pretend-multiplayer setup we've got so far.
+                long playerID = GetCurrentPlayerID();
+
+                //linq seek the player in question, get the player's save data. We're gonna pass this AlchemistFarmer around.
+                AlchemistFarmer player = playerList.Where(p => p.uniqueMultiplayerID == playerID).FirstOrDefault();
+
+                if (player.playerSaveData.AlchemyLevel >= 5)
+                {
+                    foreach(Professions professionNumber in firstRankProfessions)
+                    {
+                        switch (professionNumber)
+                        {
+                            case Professions.Shaper:
+                                if (!player.playerSaveData.HasShaperProfession)
+                                    player.playerSaveData.HasShaperProfession = true;
+                                break;
+                            case Professions.Sage:
+                                if (!player.playerSaveData.HasSageProfession)
+                                    player.playerSaveData.HasSageProfession = true;
+                                break;
+                        }
+                    }
+                    //skip this check in the future
+                    player.playerSaveData.HasAllFirstRankProfessions = true;
+                }
+
+                if (player.playerSaveData.AlchemyLevel >= 10 && !player.playerSaveData.HasAllSecondRankProfessions)
+                {
+                    foreach(Professions professionNumber in secondRankProfessions)
+                    {
+                        switch (professionNumber)
+                        {
+                            case Professions.Transmuter:
+                                if (!player.playerSaveData.HasTransmuterProfession)
+                                    player.playerSaveData.HasTransmuterProfession = true;
+                                break;
+                            case Professions.Adept:
+                                if (!player.playerSaveData.HasAdeptProfession)
+                                    player.playerSaveData.HasAdeptProfession = true;
+                                break;
+                            case Professions.Aurumancer:
+                                if (!player.playerSaveData.HasAurumancerProfession)
+                                    player.playerSaveData.HasAurumancerProfession = true;
+                                break;
+                            case Professions.Conduit:
+                                if (!player.playerSaveData.HasConduitProfession)
+                                    player.playerSaveData.HasConduitProfession = true;
+                                break;
+                             
+                        }
+                    }
+                    //skip this check in the future
+                    player.playerSaveData.HasAllSecondRankProfessions = true;
+                }                
+            }
+        }
+
+        //hooked for drawing the experience bar on screen when experience bars mod is present.
+        private void GraphicsEvents_OnPostRenderHudEvent(object sender, EventArgs e)
+        {
+            if (Game1.activeClickableMenu != null)
+                return;
+
+            try
+            {
+                //used to figure out which player we need to load, in this pretend-multiplayer setup we've got so far.
+                long playerID = GetCurrentPlayerID();
+
+                //linq seek the player in question, get the player's save data. We're gonna pass this AlchemistFarmer around.
+                AlchemistFarmer player = playerList.Where(p => p.uniqueMultiplayerID == playerID).FirstOrDefault();                
+
+                Type t = Type.GetType("ExperienceBars.Mod, ExperienceBars");
+
+                int currentAlchemyLevel = player.playerSaveData.AlchemyLevel;
+                int currentAlchemyExperience = player.playerSaveData.AlchemyExperience;
+                int x = 10;
+                int y = (int)Util.GetStaticField(t, "expBottom");
+
+                int previousExperienceRequired = 0, nextExperienceRequired = 1;
+                if (currentAlchemyLevel == 0)
+                {
+                    nextExperienceRequired = player.GetAlchemyExperienceNeededForNextLevel();
+                }
+                else if (currentAlchemyLevel != 10)
+                {
+                    previousExperienceRequired = player.GetAlchemyExperienceNeededForLevel(currentAlchemyLevel - 1);
+                    nextExperienceRequired = player.GetAlchemyExperienceNeededForLevel(currentAlchemyLevel);
+                }
+
+                int progressTowardCurrentLevel = currentAlchemyExperience - previousExperienceRequired;
+                int experienceGapForCurrentLevel = nextExperienceRequired - previousExperienceRequired;
+                float progressBarPercentage = (float)progressTowardCurrentLevel / experienceGapForCurrentLevel;
+                if (currentAlchemyLevel == 10)
+                {
+                    progressBarPercentage = -1;
+                }
+
+                object[] args = new object[]
+                {
+                    x, y,
+                    alchemySkillIcon, new Rectangle( 0, 0, 16, 16 ),
+                    currentAlchemyLevel, progressBarPercentage,
+                    new Color( 196, 79, 255 ),
+                };
+                Util.CallStaticMethod(t, "renderSkillBar", args);
+
+                Util.SetStaticField(t, "expBottom", y + 40);
+            }
+            catch (Exception ex)
+            {
+                Log.error("Exception rendering alchemy experience bar: " + ex);
+                GraphicsEvents.OnPostRenderHudEvent -= GraphicsEvents_OnPostRenderHudEvent;
+            }
+        }
+
+        public static string assetPrefix = "assets\\";
+        public struct Icons
+        {
+            public static string SkillIcon = $"{assetPrefix}alchemySkillIcon.png";
+            public static string ShaperIcon = $"{assetPrefix}shaperProfessionIcon_Hybrid.png";
+            public static string TransmuterIcon = $"{assetPrefix}transmuterProfessionIcon.png";
+            public static string AdeptIcon = $"{assetPrefix}adeptProfessionIcon.png";
+            public static string SageIcon = $"{assetPrefix}sageProfessionIcon.png";
+            public static string AurumancerIcon = $"{assetPrefix}aurumancerProfessionIcon.png";
+            public static string ConduitIcon = $"{assetPrefix}alchemySkillIcon.png";
         }
 
         //handle capturing icons/textures for the mod's texture needs.
@@ -77,9 +271,7 @@ namespace EquivalentExchange
             //alchemy skill icon
             try
             {
-                string alchemySkillIconTexturePath = Path.Combine(instance.eeHelper.DirectoryPath, "Resources", "alchemySkillIcon.png");
-                FileStream fs = new FileStream(alchemySkillIconTexturePath, FileMode.Open);
-                alchemySkillIcon = Texture2D.FromStream(Game1.graphics.GraphicsDevice, fs);
+                alchemySkillIcon = instance.eeHelper.Content.Load<Texture2D>(Icons.SkillIcon, ContentSource.ModFolder);
             }
             catch (Exception e)
             {
@@ -356,7 +548,7 @@ namespace EquivalentExchange
 
             while (attemptedAmount > 0)
             {
-                float staminaCost = player.GetStaminaCostForTransmutation(actualValue);
+                double staminaCost = player.GetStaminaCostForTransmutation(actualValue);
 
                 //if the player lacks the stamina to execute a transmute, abort
                 if (player.Stamina <= staminaCost)
@@ -381,7 +573,7 @@ namespace EquivalentExchange
                     player.TakeDamageFromRebound(actualValue);
                     didTransmuteFail = true;
                     //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
-                    if (!player.playerSaveData.hasConduitProfession)
+                    if (!player.playerSaveData.HasConduitProfession)
                         continue;
                 }
 
@@ -389,7 +581,7 @@ namespace EquivalentExchange
                 didTransmuteOccur = true;
 
                 //a rebound obviates a lucky transmute, but a profession trait obviates stamina drain when you rebound.
-                if (!didTransmuteFail && !player.playerSaveData.hasConduitProfession)
+                if (!didTransmuteFail && !player.playerSaveData.HasConduitProfession)
                     player.HandleStaminaDeduction(staminaCost);
 
                 //we floor the math here because we don't want weirdly divergent values based on stack count - the rate is fixed regardless of quantity
@@ -400,7 +592,12 @@ namespace EquivalentExchange
 
                 player.Money += totalValue;
 
-                ReduceActiveItemByAmount(Game1.player, amount);             
+                ReduceActiveItemByAmount(Game1.player, amount);
+
+                //for right now, use the cost multiplier (number of cycles cognate) as the experience gained.
+                int experienceValue = costMultiplier;
+
+                player.AddAlchemyExperience(experienceValue);
             }
 
             //a transmute (at least one) happened, play the cash money sound
@@ -432,7 +629,7 @@ namespace EquivalentExchange
             //loop for each transmute-cycle attempt
             while (player.money >= totalCost && attemptedAmount > 0)
             {
-                float staminaCost = player.GetStaminaCostForTransmutation(actualValue);
+                double staminaCost = player.GetStaminaCostForTransmutation(actualValue);
                 //if the player lacks the stamina to execute a transmute, abort
                 if (player.Stamina <= staminaCost)
                 {
@@ -452,14 +649,14 @@ namespace EquivalentExchange
                     player.TakeDamageFromRebound(actualValue);
                     didTransmuteFail = true;
                     //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
-                    if (!player.playerSaveData.hasConduitProfession)
+                    if (!player.playerSaveData.HasConduitProfession)
                         continue;
                 }
 
                 didTransmuteOccur = true;
 
                 //a rebound obviates a lucky transmute, but a profession trait obviates stamina drain when you rebound.
-                if (!didTransmuteFail && !player.playerSaveData.hasConduitProfession)
+                if (!didTransmuteFail && !player.playerSaveData.HasConduitProfession)
                     player.HandleStaminaDeduction(staminaCost);
                 
                 player.Money -= totalCost;
@@ -473,6 +670,11 @@ namespace EquivalentExchange
                 }
 
                 Game1.createItemDebris(spawnedItem, player.getStandingPosition(), player.FacingDirection, (GameLocation)null);
+
+                //for right now, use the cost multiplier (number of cycles cognate) as the experience gained.
+                int experienceValue = costMultiplier;
+
+                player.AddAlchemyExperience(experienceValue);
             }
 
             //a transmute (at least one) happened, play the magicky sound
@@ -553,7 +755,25 @@ namespace EquivalentExchange
             blackListedItemIDs.Add(StardewValley.Object.prismaticShardIndex);
         }
 
-        private bool hasAllProfessionsMod = false;
+        //hopefully the stuff needed to support spacechase0's show-experience-bars mod can start here
+
+        private static bool hasExperienceBarsMod = false;
+
+        private void CheckForExperienceBarsMod()
+        {
+            if (!Helper.ModRegistry.IsLoaded("spacechase0.ExperienceBars"))
+            {
+                Log.info("Experience Bars not found");
+                return;
+            }
+
+            hasAllProfessionsMod = true;
+
+            Log.info("[Equivalent Exchange] Experience Bars mod found, adding alchemy experience bar renderer.");       
+        }
+
+        private static bool hasAllProfessionsMod = false;
+
         private Professions[] firstRankProfessions = { Professions.Shaper, Professions.Sage };
         private Professions[] secondRankProfessions = { Professions.Transmuter, Professions.Adept, Professions.Aurumancer, Professions.Conduit };
         private void CheckForAllProfessionsMod()
@@ -564,7 +784,7 @@ namespace EquivalentExchange
                 return;
             }
 
-            Log.info("[Equivalent Exchange] All Professions found. You will get every alchemy profession for your level.");
+            Log.info("[Equivalent Exchange] All Professions mod found. You will get every alchemy profession for your level.");
             hasAllProfessionsMod = true;
         }
 

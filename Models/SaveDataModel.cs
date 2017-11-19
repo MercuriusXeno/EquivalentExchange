@@ -8,31 +8,37 @@ namespace EquivalentExchange
 {
     public class SaveDataModel
     {
-        public int alchemyLevel { get; set; }
-        public int alchemyExp { get; set; }
-        public long playerID { get; set; }
+        public int AlchemyLevel { get; set; }
+        public int AlchemyExperience { get; set; }
+        public long PlayerID { get; set; }
+
+        //two flags to optimize a check for has-all-professions of either rank, for the all professions mod.
+        public bool HasAllFirstRankProfessions { get; set; }
+        public bool HasAllSecondRankProfessions { get; set; }
 
         //the 6 professions, Shaper -> Transmuter/Adept; Sage -> Aurumancer/Conduit
-        public bool hasShaperProfession { get; set; }
-        public bool hasTransmuterProfession { get; set; }
-        public bool hasAdeptProfession { get; set; }
+        public bool HasShaperProfession { get; set; }
+        public bool HasTransmuterProfession { get; set; }
+        public bool HasAdeptProfession { get; set; }
 
         //alt path
-        public bool hasSageProfession { get; set; }
-        public bool hasAurumancerProfession { get; set; }
-        public bool hasConduitProfession { get; set; }
+        public bool HasSageProfession { get; set; }
+        public bool HasAurumancerProfession { get; set; }
+        public bool HasConduitProfession { get; set; }
 
         public SaveDataModel()
         {
-            playerID = 0;
-            alchemyLevel = 0;
-            alchemyExp = 0;
-            hasShaperProfession = false;
-            hasTransmuterProfession = false;
-            hasAdeptProfession = false;
-            hasSageProfession = false;
-            hasAurumancerProfession = false;
-            hasConduitProfession = false;
+            PlayerID = 0;
+            AlchemyLevel = 0;
+            AlchemyExperience = 0;
+            HasAllFirstRankProfessions = false;
+            HasAllSecondRankProfessions = false;
+            HasShaperProfession = false;
+            HasTransmuterProfession = false;
+            HasAdeptProfession = false;
+            HasSageProfession = false;
+            HasAurumancerProfession = false;
+            HasConduitProfession = false;
         }
     }
 }

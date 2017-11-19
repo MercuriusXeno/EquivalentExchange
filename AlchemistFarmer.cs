@@ -11,6 +11,24 @@ namespace EquivalentExchange
 {
     public class AlchemistFarmer : StardewValley.Farmer
     {
+        //constants for storing some important formula values as non-magic numbers, this is the impact level ups and other factors have on formulas, stored in constants for easy edits.
+        public const double transmutationBonusPerLevel = 0.1D;
+        public const double liquidationBonusPerLevel = 0.025D;
+        public const double skillStaminaDrainImpactPerLevel = 0.075D;
+        public const double sageProfessionStaminaDrainBonus = 0.15D;
+        public const double baseValueCoefficient = 0.5D;
+        public const double aurumancerLiquidationBonus = 0.25D;
+        public const double baseCostCoefficient = 3D;
+        public const double luckReboundImpact = 0.01D;
+        public const double baseReboundRate = 0.05D;
+        public const double transmuterTransmutationBonus = 1D;
+        public const double shaperDailyLuckBonus = 2D;
+        public const double luckNormalizationForFreeTransmutes = 0.13D;
+        public const double luckFreeTransmuteImpact = 0.01D;
+        public const double skillFreeTransmuteImpact = 0.03D;
+        public const double maxDistanceFactor = 10D;
+        public const double distanceBonusForLuckFactorNormalization = (200D / 3D);
+
         //default experience progression values that I'm gonna try to balance around, somehow.
         public static readonly int[] alchemyExperienceNeededPerLevel = new int[] { 100, 380, 770, 1300, 2150, 3300, 4800, 6900, 10000, 15000 };
 
@@ -31,56 +49,78 @@ namespace EquivalentExchange
         //increment alchemy experience and handle levelups if applicable
         public void AddAlchemyExperience(int exp)
         {
-            playerSaveData.alchemyExp += exp;
+            playerSaveData.AlchemyExperience += exp;
 
-            while (playerSaveData.alchemyLevel < 10 && playerSaveData.alchemyExp >= GetAlchemyExperienceNeededForNextLevel())
+            while (playerSaveData.AlchemyLevel < 10 && playerSaveData.AlchemyExperience >= GetAlchemyExperienceNeededForNextLevel())
             {
-                playerSaveData.alchemyLevel++;
+                playerSaveData.AlchemyLevel++;
+                //player gained a skilllevel, flag the night time skill up to appear.
+                EquivalentExchange.instance.AddSkillUpMenuAppearance(playerSaveData.AlchemyLevel);
             }
+        }
+
+        //overloaded method for how much experience is needed to reach a specific level.
+        public int GetAlchemyExperienceNeededForLevel(int level)
+        {
+            if (level > 0 && level < 11)
+                return alchemyExperienceNeededPerLevel[level - 1];
+            return int.MaxValue;
         }
 
         //how much experience is needed to reach next level
         public int GetAlchemyExperienceNeededForNextLevel()
-        {            
-            if (playerSaveData.alchemyLevel < 10)
-                return alchemyExperienceNeededPerLevel[playerSaveData.alchemyLevel];
-            return int.MaxValue;
+        {
+            return GetAlchemyExperienceNeededForLevel(playerSaveData.AlchemyLevel + 1);
         }
 
         //get the coefficient for stamina drain
-        public float GetAlchemyStaminaCostSkillMultiplier()
+        public double GetAlchemyStaminaCostSkillMultiplier()
         {
             //base of 1 - 0.075 per skill level - profession modifiers
-            return 1 - (playerSaveData.alchemyLevel * 0.075F) - (playerSaveData.hasSageProfession ? 0.15F : 0.0F);
+            return 1 - (playerSaveData.AlchemyLevel * skillStaminaDrainImpactPerLevel) - (playerSaveData.HasSageProfession ? sageProfessionStaminaDrainBonus : 0.0F);
         }
 
         //algorithm to return stamina cost for the act of transmuting/liquidating an item, based on player skill and item value
-        public float GetStaminaCostForTransmutation(int itemValue)
+        public double GetStaminaCostForTransmutation(int itemValue)
         {
-            return (float)Math.Sqrt(itemValue) * GetAlchemyStaminaCostSkillMultiplier();
+            return Math.Sqrt(itemValue) * GetAlchemyStaminaCostSkillMultiplier();
         }
 
         //get the coefficient for item sell value
-        public float GetLiquidationValuePercentage()
+        public double GetLiquidationValuePercentage()
         {
-            //base of 0.5 + 0.03 per skill level + profession modifiers
-            return 0.5F + (0.03F * playerSaveData.alchemyLevel) + (playerSaveData.hasAurumancerProfession ? 0.25F : 0.0F);
+            return GetLiquidationValuePercentage(playerSaveData.AlchemyLevel, playerSaveData.HasAurumancerProfession);
         }
 
         //get the coefficient for item price for transmutation
-        public float GetTransmutationMarkupPercentage()
+        public double GetTransmutationMarkupPercentage()
         {
-            //base of 3.0 - 0.1 per skill level - profession modifiers
-            return 3.0F - (0.1F * playerSaveData.alchemyLevel) - (playerSaveData.hasTransmuterProfession ? 1.0F : 0.0F);
+            return GetTransmutationMarkupPercentage(playerSaveData.AlchemyLevel, playerSaveData.HasTransmuterProfession);
         }
 
         //the chance a player will fail to transmute/liquidate an item
         public double GetReboundChance()
-        {
-            double baseReboundRate = 0.05D;
-            double distanceFactor = DistanceCalculator.GetPathDistance(this.currentLocation);
-            double luckFactor = (this.LuckLevel * 0.01D) + Game1.dailyLuck;
+        {            
+            double distanceFactor = Math.Max(0D, DistanceCalculator.GetPathDistance(this.currentLocation) - this.playerSaveData.AlchemyLevel);            
+            double luckFactor = (this.LuckLevel * luckReboundImpact) + Game1.dailyLuck;
             return Math.Max(0, (baseReboundRate + distanceFactor) - luckFactor);
+        }
+
+        internal static double GetTransmutationMarkupPercentage(int whichLevel, bool hasTransmuterProfession)
+        {
+            //base of 3.0 - 0.1 per skill level - profession modifiers
+            return baseCostCoefficient - (transmutationBonusPerLevel * whichLevel) - (hasTransmuterProfession ? transmuterTransmutationBonus : 0.0F);
+        }
+
+        internal static double GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(int whichLevel, int luckLevel)
+        {
+            return (luckLevel * luckFreeTransmuteImpact) + (whichLevel * skillFreeTransmuteImpact);
+        }
+
+        internal static double GetLiquidationValuePercentage(int whichLevel, bool hasAurumancerProfession)
+        {
+            //base of 0.5 + 0.03 per skill level + profession modifiers
+            return baseValueCoefficient + (liquidationBonusPerLevel * whichLevel) + (hasAurumancerProfession ? aurumancerLiquidationBonus : 0.0F);
         }
 
         //check if the player failed a rebound check
@@ -120,21 +160,28 @@ namespace EquivalentExchange
         //lucky transmutes are basically transmutes that don't cost stamina. this is your chance to get one.
         public double GetLuckyTransmuteChance()
         {
-            double dailyLuck = Game1.dailyLuck * (playerSaveData.hasShaperProfession ? 2D : 1D);
-            double luckFactor = (this.LuckLevel * 0.01) +  + 0.13D;
+            //normalize luck to a non-negative between 1% and 25%, it increases based on a profession
+            double dailyLuck = (Game1.dailyLuck + luckNormalizationForFreeTransmutes) * (playerSaveData.HasShaperProfession ? shaperDailyLuckBonus : 1D);
+
+            double luckFactor = GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses();
 
             //player gets a lucky bonus based on proximity to an alchemy leyline
-            if (playerSaveData.hasAdeptProfession)
+            if (playerSaveData.HasAdeptProfession)
             {
                 double distanceFactor = DistanceCalculator.GetPathDistance(this.currentLocation);
 
                 //current formula accounts for as much as a distance of 10 from the leyline.
                 //normalizes being on a 0 "distance" leyline as a 15% bonus lucky transmute chance.
                 //any distance factor farther than 10 receives 0% bonus. There are no penalties.
-                luckFactor += Math.Max((10D - distanceFactor) / (200D / 3D), 0);
+                luckFactor += Math.Max((maxDistanceFactor - distanceFactor) / distanceBonusForLuckFactorNormalization, 0D);
             }            
             
-            return luckFactor;
+            return luckFactor + dailyLuck;
+        }
+
+        public double GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses()
+        {
+            return GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(playerSaveData.AlchemyLevel, this.LuckLevel);
         }
 
         //check to see if this is a lucky [free] transmute
@@ -144,11 +191,36 @@ namespace EquivalentExchange
         }
 
         //handles draining stamina on successful transmute, and checking for lucky transmutes.
-        public void HandleStaminaDeduction(float staminaCost)
+        public void HandleStaminaDeduction(double staminaCost)
         {
             if (IsLuckyTransmute())
                 return;
-            this.Stamina -= staminaCost;
+            this.Stamina -= (float)staminaCost;
+        }
+
+        internal void EnableAlchemistProfession(EquivalentExchange.Professions profession)
+        {
+            switch (profession)
+            {
+                case EquivalentExchange.Professions.Shaper:
+                    playerSaveData.HasShaperProfession = true;
+                    break;
+                case EquivalentExchange.Professions.Sage:
+                    playerSaveData.HasSageProfession = true;
+                    break;
+                case EquivalentExchange.Professions.Transmuter:
+                    playerSaveData.HasTransmuterProfession = true;
+                    break;
+                case EquivalentExchange.Professions.Adept:
+                    playerSaveData.HasAdeptProfession = true;
+                    break;
+                case EquivalentExchange.Professions.Aurumancer:
+                    playerSaveData.HasAurumancerProfession = true;
+                    break;
+                case EquivalentExchange.Professions.Conduit:
+                    playerSaveData.HasConduitProfession = true;
+                    break;
+            }
         }
     }
 }
