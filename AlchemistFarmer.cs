@@ -33,14 +33,14 @@ namespace EquivalentExchange
         {
             playerSaveData.alchemyExp += exp;
 
-            while (playerSaveData.alchemyExp >= GetAlchemySkillForNextLevel())
+            while (playerSaveData.alchemyLevel < 10 && playerSaveData.alchemyExp >= GetAlchemyExperienceNeededForNextLevel())
             {
                 playerSaveData.alchemyLevel++;
             }
         }
 
         //how much experience is needed to reach next level
-        public int GetAlchemySkillForNextLevel()
+        public int GetAlchemyExperienceNeededForNextLevel()
         {            
             if (playerSaveData.alchemyLevel < 10)
                 return alchemyExperienceNeededPerLevel[playerSaveData.alchemyLevel];
@@ -79,7 +79,7 @@ namespace EquivalentExchange
         {
             double baseReboundRate = 0.05D;
             double distanceFactor = DistanceCalculator.GetPathDistance(this.currentLocation);
-            double luckFactor = (this.LuckLevel * 0.01) + Game1.dailyLuck;
+            double luckFactor = (this.LuckLevel * 0.01D) + Game1.dailyLuck;
             return Math.Max(0, (baseReboundRate + distanceFactor) - luckFactor);
         }
 
@@ -127,30 +127,28 @@ namespace EquivalentExchange
             if (playerSaveData.hasAdeptProfession)
             {
                 double distanceFactor = DistanceCalculator.GetPathDistance(this.currentLocation);
-                luckFactor += Math.Max((10D - distanceFactor) / (2D / 3D), 0);
+
+                //current formula accounts for as much as a distance of 10 from the leyline.
+                //normalizes being on a 0 "distance" leyline as a 15% bonus lucky transmute chance.
+                //any distance factor farther than 10 receives 0% bonus. There are no penalties.
+                luckFactor += Math.Max((10D - distanceFactor) / (200D / 3D), 0);
             }            
             
             return luckFactor;
         }
 
+        //check to see if this is a lucky [free] transmute
         public bool IsLuckyTransmute()
         {
             return alchemyRandom.NextDouble() <= GetLuckyTransmuteChance();
         }
 
+        //handles draining stamina on successful transmute, and checking for lucky transmutes.
         public void HandleStaminaDeduction(float staminaCost)
         {
             if (IsLuckyTransmute())
                 return;
             this.Stamina -= staminaCost;
         }
-
-        //professions:
-        //Shaper(Rank 5): Daily Luck(0 - 20%) is twice as effective.
-        //Transmuter(Rank 10): Coefficient Cost -= 1 [Big Bonus]
-        //Adept(Rank 10): Proximity to Wizard Tower increases your chance of Free Transmutes.
-        //Sage(Rank 5): PlayerSkillMult -= 0.15 [Stamina Cost max 75% reduction becomes 90%]
-        //Aurumancer(Rank 10): Coefficient Value += 0.25 [Big Bonus]
-        //Conduit(Rank 10): Rebounds now count as a free transmute, but you still take health damage.
     }
 }

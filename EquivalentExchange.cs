@@ -8,6 +8,8 @@ using Microsoft.Xna.Framework.Input;
 
 using EquivalentExchange.Models;
 using System.IO;
+using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework;
 
 namespace EquivalentExchange
 {
@@ -29,6 +31,8 @@ namespace EquivalentExchange
 
         //config for if the mod is allowed to play sounds
         public static bool canPlaySounds;
+
+        public static Texture2D alchemySkillIcon;
 
         /*********
         ** Public methods
@@ -63,6 +67,26 @@ namespace EquivalentExchange
 
             //we need this to save our alchemists['] data
             SaveEvents.BeforeSave += SaveEvents_BeforeSave;
+
+            HandleTextureCaching();
+        }
+
+        //handle capturing icons/textures for the mod's texture needs.
+        private void HandleTextureCaching()
+        {
+            //alchemy skill icon
+            try
+            {
+                string alchemySkillIconTexturePath = Path.Combine(instance.eeHelper.DirectoryPath, "Resources", "alchemySkillIcon.png");
+                FileStream fs = new FileStream(alchemySkillIconTexturePath, FileMode.Open);
+                alchemySkillIcon = Texture2D.FromStream(Game1.graphics.GraphicsDevice, fs);
+            }
+            catch (Exception e)
+            {
+                Log.error("Failed to load icon: " + e);
+                alchemySkillIcon = new Texture2D(Game1.graphics.GraphicsDevice, 16, 16);
+                alchemySkillIcon.SetData(Enumerable.Range(0, 16 * 16).Select(i => new Color(225, 168, 255)).ToArray());
+            }
         }
 
         //bit of helpful abstraction in dealing with cross-platform paths for save data.
