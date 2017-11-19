@@ -63,6 +63,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AlchemistFarmer.cs" />
+    <Compile Include="DistanceCalculator.cs" />
     <Compile Include="EquivalentExchange.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="Models\ModConfigModel.cs" />
