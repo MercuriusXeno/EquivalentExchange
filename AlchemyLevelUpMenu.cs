@@ -52,7 +52,7 @@ namespace EquivalentExchange
 
         private List<TemporaryAnimatedSprite> littleStars = new List<TemporaryAnimatedSprite>();
 
-        private AlchemistFarmer player = null;
+        private StardewValley.Farmer player = null;
 
         public AlchemyLevelUpMenu()
             : base(Game1.viewport.Width / 2 - 384, Game1.viewport.Height / 2 - 256, 768, 512, false)
@@ -63,7 +63,7 @@ namespace EquivalentExchange
             this.okButton = new ClickableTextureComponent(new Rectangle(this.xPositionOnScreen + this.width + 4, this.yPositionOnScreen + this.height - Game1.tileSize - IClickableMenu.borderWidth, Game1.tileSize, Game1.tileSize), Game1.mouseCursors, Game1.getSourceRectForStandardTileSheet(Game1.mouseCursors, 46, -1, -1), 1f, false);
         }
 
-        public AlchemyLevelUpMenu(AlchemistFarmer constructorPlayer, int level)
+        public AlchemyLevelUpMenu(StardewValley.Farmer constructorPlayer,  int level)
             : base(Game1.viewport.Width / 2 - 384, Game1.viewport.Height / 2 - 256, 768, 512, false)
         {
             this.player = constructorPlayer;
@@ -84,7 +84,7 @@ namespace EquivalentExchange
                 this.currentLevel,
                 " Alchemy"
             });
-            this.extraInfoForLevel = this.GetExtraInfoForLevel(this.currentLevel, constructorPlayer.luckLevel, constructorPlayer.playerSaveData.HasAurumancerProfession, constructorPlayer.playerSaveData.HasTransmuterProfession);
+            this.extraInfoForLevel = this.GetExtraInfoForLevel(this.currentLevel, constructorPlayer.luckLevel, EquivalentExchange.instance.currentPlayerData.HasAurumancerProfession, EquivalentExchange.instance.currentPlayerData.HasTransmuterProfession);
             sourceRectForLevelIcon = new Rectangle(0, 0, 16, 16);
             if (this.currentLevel > 0 && this.currentLevel % 5 == 0)
             {
@@ -95,7 +95,7 @@ namespace EquivalentExchange
                     this.professionsToChoose.Add(EquivalentExchange.Professions.Shaper);
                     this.professionsToChoose.Add(EquivalentExchange.Professions.Sage);
                 }
-                else if (constructorPlayer.playerSaveData.HasShaperProfession)
+                else if (EquivalentExchange.instance.currentPlayerData.HasShaperProfession)
                 {
                     this.professionsToChoose.Add(EquivalentExchange.Professions.Transmuter);
                     this.professionsToChoose.Add(EquivalentExchange.Professions.Adept);                    
@@ -127,12 +127,12 @@ namespace EquivalentExchange
 
         public List<string> GetExtraInfoForLevel(int whichLevel, int luckLevel, bool hasAurumancerProfession, bool hasTransmuterProfession)
         {
-            double nextCoefficientCost = (AlchemistFarmer.GetTransmutationMarkupPercentage(whichLevel, hasTransmuterProfession) - AlchemistFarmer.transmutationBonusPerLevel) * 100D;
+            double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(whichLevel, hasTransmuterProfession) - Alchemy.transmutationBonusPerLevel) * 100D;
             string coefficientCost = $"Transmutation Cost: {nextCoefficientCost.ToString()}%";
-            double nextCoefficientValue = (AlchemistFarmer.GetLiquidationValuePercentage(whichLevel, hasAurumancerProfession) + AlchemistFarmer.liquidationBonusPerLevel) * 100D;
+            double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(whichLevel, hasAurumancerProfession) + Alchemy.liquidationBonusPerLevel) * 100D;
             string coefficientValue = $"Liquidation Value: {nextCoefficientValue.ToString()}%";
-            double luckyTransmuteMinimum = ((AlchemistFarmer.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + 0.01) * 100);
-            double luckyTransmuteMaximum = ((AlchemistFarmer.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + AlchemistFarmer.luckNormalizationForFreeTransmutes) * 100);
+            double luckyTransmuteMinimum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + 0.01) * 100);
+            double luckyTransmuteMaximum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + Alchemy.luckNormalizationForFreeTransmutes) * 100);
             string luckyTransmuteChance = $"Lucky Transmute Chance: {luckyTransmuteMinimum.ToString()}% to {luckyTransmuteMaximum.ToString()}%";
             string distanceFromTowerImpact = $"You can be { whichLevel } maps from an alchemical leyline (such as inside the Wizard's Tower) before rebounds become more likely.";
 
@@ -155,10 +155,10 @@ namespace EquivalentExchange
                     break;
                 case EquivalentExchange.Professions.Sage:                    
                     list.Add($"The base stamina cost of any transmutation is");
-                    list.Add($"reduced by a flat { (AlchemistFarmer.sageProfessionStaminaDrainBonus * 100D) }%");
+                    list.Add($"reduced by a flat { (Alchemy.sageProfessionStaminaDrainBonus * 100D) }%");
                     break;
                 case EquivalentExchange.Professions.Transmuter:
-                    double nextCoefficientCost = (AlchemistFarmer.GetTransmutationMarkupPercentage(10, true) - AlchemistFarmer.transmuterTransmutationBonus) * 100D;                    
+                    double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(10, true) - Alchemy.transmuterTransmutationBonus) * 100D;                    
                     list.Add($"Transmutation Cost reduced to { nextCoefficientCost.ToString() }%");
                     break;
                 case EquivalentExchange.Professions.Adept:                    
@@ -166,7 +166,7 @@ namespace EquivalentExchange
                     list.Add($"increase your chance of a lucky transmute (costing no stamina) by up to 15%.");
                     break;
                 case EquivalentExchange.Professions.Aurumancer:
-                    double nextCoefficientValue = (AlchemistFarmer.GetLiquidationValuePercentage(10, true) + AlchemistFarmer.aurumancerLiquidationBonus) * 100D;                    
+                    double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(10, true) + Alchemy.aurumancerLiquidationBonus) * 100D;                    
                     list.Add($"Liquidation Value increased to { nextCoefficientValue.ToString() }%");
                     break;
                 case EquivalentExchange.Professions.Conduit:
@@ -274,7 +274,7 @@ namespace EquivalentExchange
                         this.leftProfessionColor = Color.Green;
                         if (((Mouse.GetState().LeftButton == ButtonState.Pressed && this.oldMouseState.LeftButton == ButtonState.Released) || (Game1.options.gamepadControls && GamePad.GetState(PlayerIndex.One).IsButtonDown(Buttons.A) && !Game1.oldPadState.IsButtonDown(Buttons.A))) && this.readyToClose())
                         {
-                            player.EnableAlchemistProfession(this.professionsToChoose[0]);
+                            Alchemy.EnableAlchemistProfession(this.professionsToChoose[0]);
                             this.isActive = false;
                             this.informationUp = false;
                             this.isProfessionChooser = false;
@@ -285,7 +285,7 @@ namespace EquivalentExchange
                         this.rightProfessionColor = Color.Green;
                         if (((Mouse.GetState().LeftButton == ButtonState.Pressed && this.oldMouseState.LeftButton == ButtonState.Released) || (Game1.options.gamepadControls && GamePad.GetState(PlayerIndex.One).IsButtonDown(Buttons.A) && !Game1.oldPadState.IsButtonDown(Buttons.A))) && this.readyToClose())
                         {
-                            player.EnableAlchemistProfession(this.professionsToChoose[1]);
+                            Alchemy.EnableAlchemistProfession(this.professionsToChoose[1]);
                             this.isActive = false;
                             this.informationUp = false;
                             this.isProfessionChooser = false;

@@ -22,14 +22,13 @@ namespace EquivalentExchange
         //instantiate config
         private ConfigurationModel Config;
         
-        //"list" of players, intended for working around future multiplayer, maybe.
-        public List<AlchemistFarmer> playerList = new List<AlchemistFarmer>();
-
         //this instance of the mod's helper class file, intialized by Entry
         public IModHelper eeHelper;
 
         //the mod's "static" instance, initialized by Entry. There caN ONly bE ONe
         public static EquivalentExchange instance;
+
+        public SaveDataModel currentPlayerData;
 
         //config for if the mod is allowed to play sounds
         public static bool canPlaySounds;
@@ -106,12 +105,8 @@ namespace EquivalentExchange
         }
 
         private void ShowEndOfNightLevelMenu()
-        {
-            //used to figure out which player we need to load, in this pretend-multiplayer setup we've got so far.
-            long playerID = GetCurrentPlayerID();
-
-            //linq seek the player in question, get the player's save data. We're gonna pass this AlchemistFarmer around.
-            AlchemistFarmer player = playerList.Where(p => p.uniqueMultiplayerID == playerID).FirstOrDefault();
+        {            
+            
 
             if (showLevelUpMenusByRank.Count() > 0)
             {
@@ -119,17 +114,17 @@ namespace EquivalentExchange
                 {
                     int level = showLevelUpMenusByRank[i];
 
-                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(player, level));
+                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, level));
                 }
                 showLevelUpMenusByRank.Clear();
             }
-            else if (player.playerSaveData.AlchemyLevel >= 5 && !player.playerSaveData.HasShaperProfession && !player.playerSaveData.HasSageProfession)
+            else if (currentPlayerData.AlchemyLevel >= 5 && !instance.currentPlayerData.HasShaperProfession && !instance.currentPlayerData.HasSageProfession)
             {
-                Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(player, 5));
+                Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, 5));
             }
-            else if (player.playerSaveData.AlchemyLevel >= 10 && !player.playerSaveData.HasTransmuterProfession && !player.playerSaveData.HasAdeptProfession && !player.playerSaveData.HasAurumancerProfession && !player.playerSaveData.HasConduitProfession)
+            else if (currentPlayerData.AlchemyLevel >= 10 && !instance.currentPlayerData.HasTransmuterProfession && !instance.currentPlayerData.HasAdeptProfession && !instance.currentPlayerData.HasAurumancerProfession && !instance.currentPlayerData.HasConduitProfession)
             {            
-                Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(player, 10));
+                Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, 10));
             }
         }
 
@@ -138,59 +133,53 @@ namespace EquivalentExchange
         {
             if (hasAllProfessionsMod)
             {
-                //used to figure out which player we need to load, in this pretend-multiplayer setup we've got so far.
-                long playerID = GetCurrentPlayerID();
-
-                //linq seek the player in question, get the player's save data. We're gonna pass this AlchemistFarmer around.
-                AlchemistFarmer player = playerList.Where(p => p.uniqueMultiplayerID == playerID).FirstOrDefault();
-
-                if (player.playerSaveData.AlchemyLevel >= 5)
+                if (instance.currentPlayerData.AlchemyLevel >= 5)
                 {
                     foreach(Professions professionNumber in firstRankProfessions)
                     {
                         switch (professionNumber)
                         {
                             case Professions.Shaper:
-                                if (!player.playerSaveData.HasShaperProfession)
-                                    player.playerSaveData.HasShaperProfession = true;
+                                if (!instance.currentPlayerData.HasShaperProfession)
+                                    instance.currentPlayerData.HasShaperProfession = true;
                                 break;
                             case Professions.Sage:
-                                if (!player.playerSaveData.HasSageProfession)
-                                    player.playerSaveData.HasSageProfession = true;
+                                if (!instance.currentPlayerData.HasSageProfession)
+                                    instance.currentPlayerData.HasSageProfession = true;
                                 break;
                         }
                     }
                     //skip this check in the future
-                    player.playerSaveData.HasAllFirstRankProfessions = true;
+                    instance.currentPlayerData.HasAllFirstRankProfessions = true;
                 }
 
-                if (player.playerSaveData.AlchemyLevel >= 10 && !player.playerSaveData.HasAllSecondRankProfessions)
+                if (instance.currentPlayerData.AlchemyLevel >= 10 && !instance.currentPlayerData.HasAllSecondRankProfessions)
                 {
                     foreach(Professions professionNumber in secondRankProfessions)
                     {
                         switch (professionNumber)
                         {
                             case Professions.Transmuter:
-                                if (!player.playerSaveData.HasTransmuterProfession)
-                                    player.playerSaveData.HasTransmuterProfession = true;
+                                if (!instance.currentPlayerData.HasTransmuterProfession)
+                                    instance.currentPlayerData.HasTransmuterProfession = true;
                                 break;
                             case Professions.Adept:
-                                if (!player.playerSaveData.HasAdeptProfession)
-                                    player.playerSaveData.HasAdeptProfession = true;
+                                if (!instance.currentPlayerData.HasAdeptProfession)
+                                    instance.currentPlayerData.HasAdeptProfession = true;
                                 break;
                             case Professions.Aurumancer:
-                                if (!player.playerSaveData.HasAurumancerProfession)
-                                    player.playerSaveData.HasAurumancerProfession = true;
+                                if (!instance.currentPlayerData.HasAurumancerProfession)
+                                    instance.currentPlayerData.HasAurumancerProfession = true;
                                 break;
                             case Professions.Conduit:
-                                if (!player.playerSaveData.HasConduitProfession)
-                                    player.playerSaveData.HasConduitProfession = true;
+                                if (!instance.currentPlayerData.HasConduitProfession)
+                                    instance.currentPlayerData.HasConduitProfession = true;
                                 break;
                              
                         }
                     }
                     //skip this check in the future
-                    player.playerSaveData.HasAllSecondRankProfessions = true;
+                    instance.currentPlayerData.HasAllSecondRankProfessions = true;
                 }                
             }
         }
@@ -203,28 +192,22 @@ namespace EquivalentExchange
 
             try
             {
-                //used to figure out which player we need to load, in this pretend-multiplayer setup we've got so far.
-                long playerID = GetCurrentPlayerID();
-
-                //linq seek the player in question, get the player's save data. We're gonna pass this AlchemistFarmer around.
-                AlchemistFarmer player = playerList.Where(p => p.uniqueMultiplayerID == playerID).FirstOrDefault();                
-
                 Type t = Type.GetType("ExperienceBars.Mod, ExperienceBars");
 
-                int currentAlchemyLevel = player.playerSaveData.AlchemyLevel;
-                int currentAlchemyExperience = player.playerSaveData.AlchemyExperience;
+                int currentAlchemyLevel = instance.currentPlayerData.AlchemyLevel;
+                int currentAlchemyExperience = instance.currentPlayerData.AlchemyExperience;
                 int x = 10;
                 int y = (int)Util.GetStaticField(t, "expBottom");
 
                 int previousExperienceRequired = 0, nextExperienceRequired = 1;
                 if (currentAlchemyLevel == 0)
                 {
-                    nextExperienceRequired = player.GetAlchemyExperienceNeededForNextLevel();
+                    nextExperienceRequired = Alchemy.GetAlchemyExperienceNeededForNextLevel();
                 }
                 else if (currentAlchemyLevel != 10)
                 {
-                    previousExperienceRequired = player.GetAlchemyExperienceNeededForLevel(currentAlchemyLevel - 1);
-                    nextExperienceRequired = player.GetAlchemyExperienceNeededForLevel(currentAlchemyLevel);
+                    previousExperienceRequired = Alchemy.GetAlchemyExperienceNeededForLevel(currentAlchemyLevel - 1);
+                    nextExperienceRequired = Alchemy.GetAlchemyExperienceNeededForLevel(currentAlchemyLevel);
                 }
 
                 int progressTowardCurrentLevel = currentAlchemyExperience - previousExperienceRequired;
@@ -271,7 +254,7 @@ namespace EquivalentExchange
             //alchemy skill icon
             try
             {
-                alchemySkillIcon = instance.eeHelper.Content.Load<Texture2D>(Icons.SkillIcon, ContentSource.ModFolder);
+                alchemySkillIcon = instance.eeHelper.Content.Load<Texture2D>(Icons.SkillIcon);
             }
             catch (Exception e)
             {
@@ -294,38 +277,21 @@ namespace EquivalentExchange
             PopulateItemLibrary();
         }
 
-        //placeholder method that currently just holds one player in an array. Replace this with a multiplayer method when the time comes.
-        private StardewValley.Farmer[] GetPlayerList()
-        {
-            return new StardewValley.Farmer[]{ Game1.player };
-        }
-
         //handles reading "each" player json file and loading them into memory
         private void InitializePlayerData()
         {
             // save is loaded
             if (Context.IsWorldReady)
-            {
-                StardewValley.Farmer[] players = GetPlayerList();
-                foreach (StardewValley.Farmer player in players)
-                {
-                    //fetch each player's data, we're using it to populate a list, and using those to build custom player class instances.
-                    SaveDataModel currentPlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>(GetSaveDirectory(player));
-
-                    //construct a player with custom metadata which extends player
-                    AlchemistFarmer alchemistPlayer = new AlchemistFarmer(currentPlayerData);
-                    
-                    //add the player data to the instance list
-                    instance.playerList.Add(alchemistPlayer);                    
-                }
+            {                
+                //fetch each player's data, we're using it to populate a list, and using those to build custom player class instances.
+                instance.currentPlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>(GetSaveDirectory(Game1.player));                
             }
         }
 
         //handles writing "each" player's json save to the appropriate file.
         private void SaveEvents_BeforeSave(object sender, EventArgs e)
         {
-            foreach (AlchemistFarmer player in instance.playerList)
-                instance.eeHelper.WriteJsonFile<SaveDataModel>(GetSaveDirectory(player), player.playerSaveData);
+            instance.eeHelper.WriteJsonFile<SaveDataModel>(GetSaveDirectory(Game1.player), instance.currentPlayerData);
         }
 
         //used to hold how many seconds to wait before the mod is allowed to play a transmutation sound
@@ -491,17 +457,11 @@ namespace EquivalentExchange
                 //per the advice of Ento, abort if the player is in an event
                 if (Game1.CurrentEvent != null)
                     return;
-
-                //used to figure out which player we need to load, in this pretend-multiplayer setup we've got so far.
-                long playerID = GetCurrentPlayerID();
-
-                //linq seek the player in question, get the player's save data. We're gonna pass this AlchemistFarmer around.
-                AlchemistFarmer player = playerList.Where(p => p.uniqueMultiplayerID == playerID).FirstOrDefault();
-
+                
                 //something may have gone wrong if this is null, maybe there's no save data?
-                if (player != null) {
+                if (Game1.player != null) {
                     //get the player's current item
-                    Item heldItem = player.CurrentItem;
+                    Item heldItem = Game1.player.CurrentItem;
 
                     //player is holding item
                     if (heldItem != null)
@@ -521,20 +481,20 @@ namespace EquivalentExchange
                         //try to transmute [copy] the item
                         if (keyPressed.ToString() == Config.TransmuteKey)
                         {
-                            HandleTransmuteEvent(player, heldItem, amount, actualValue, costMultiplier);
+                            HandleTransmuteEvent(heldItem, amount, actualValue, costMultiplier);
                         }
 
                         //try to liquidate the item [sell for gold]
                         if (keyPressed.ToString() == Config.LiquidateKey)
                         {
-                            HandleLiquidateEvent(player, heldItem, amount, actualValue, costMultiplier);
+                            HandleLiquidateEvent(heldItem, amount, actualValue, costMultiplier);
                         }
                     }
                 }
             }
         }
 
-        public void HandleLiquidateEvent(AlchemistFarmer player, Item heldItem, int attemptedAmount, int actualValue, int costMultiplier)
+        public void HandleLiquidateEvent(Item heldItem, int attemptedAmount, int actualValue, int costMultiplier)
         {            
             //reduce the amount if the player's modifying the count and it is greater than what the stack holds.
             //for player convenience, the mod won't let you liquidate the last item
@@ -548,10 +508,10 @@ namespace EquivalentExchange
 
             while (attemptedAmount > 0)
             {
-                double staminaCost = player.GetStaminaCostForTransmutation(actualValue);
+                double staminaCost = Alchemy.GetStaminaCostForTransmutation(actualValue);
 
                 //if the player lacks the stamina to execute a transmute, abort
-                if (player.Stamina <= staminaCost)
+                if (Game1.player.Stamina <= staminaCost)
                 {
                     attemptedAmount = 0;
                     continue;
@@ -564,16 +524,16 @@ namespace EquivalentExchange
 
                 //if we fail this check, it's because a rebound would kill the player.
                 //if the rebound chance is zero, this check will automatically pass.
-                if (!player.CanSurviveRebound(actualValue))
+                if (!Alchemy.CanSurviveRebound(actualValue))
                     continue;
 
                 //if we fail this check, transmutation will fail this cycle.
                 //this is our "rebound check"
-                if (player.DidPlayerFailReboundCheck()) {
-                    player.TakeDamageFromRebound(actualValue);
+                if (Alchemy.DidPlayerFailReboundCheck()) {
+                    Alchemy.TakeDamageFromRebound(actualValue);
                     didTransmuteFail = true;
                     //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
-                    if (!player.playerSaveData.HasConduitProfession)
+                    if (!instance.currentPlayerData.HasConduitProfession)
                         continue;
                 }
 
@@ -581,23 +541,23 @@ namespace EquivalentExchange
                 didTransmuteOccur = true;
 
                 //a rebound obviates a lucky transmute, but a profession trait obviates stamina drain when you rebound.
-                if (!didTransmuteFail && !player.playerSaveData.HasConduitProfession)
-                    player.HandleStaminaDeduction(staminaCost);
+                if (!didTransmuteFail && !instance.currentPlayerData.HasConduitProfession)
+                    Alchemy.HandleStaminaDeduction(staminaCost);
 
                 //we floor the math here because we don't want weirdly divergent values based on stack count - the rate is fixed regardless of quantity
                 //this occurs at the expense of rounding - liquidation is lossy.
-                int liquidationValue = (int)Math.Floor(player.GetLiquidationValuePercentage() * actualValue);
+                int liquidationValue = (int)Math.Floor(Alchemy.GetLiquidationValuePercentage() * actualValue);
 
                 int totalValue = liquidationValue * amount;
 
-                player.Money += totalValue;
+                Game1.player.Money += totalValue;
 
                 ReduceActiveItemByAmount(Game1.player, amount);
 
                 //for right now, use the cost multiplier (number of cycles cognate) as the experience gained.
                 int experienceValue = costMultiplier;
 
-                player.AddAlchemyExperience(experienceValue);
+                Alchemy.AddAlchemyExperience(experienceValue);
             }
 
             //a transmute (at least one) happened, play the cash money sound
@@ -609,10 +569,10 @@ namespace EquivalentExchange
                 PlayReboundSound();
         }
 
-        public void HandleTransmuteEvent (AlchemistFarmer player, Item heldItem, int attemptedAmount, int actualValue, int costMultiplier)
+        public void HandleTransmuteEvent (Item heldItem, int attemptedAmount, int actualValue, int costMultiplier)
         {
             //cost of a single item, multiplied by the cost multiplier below
-            int transmutationCost = (int)Math.Ceiling(player.GetTransmutationMarkupPercentage() * actualValue);
+            int transmutationCost = (int)Math.Ceiling(Alchemy.GetTransmutationMarkupPercentage() * actualValue);
 
             //unlike liquidations, amount shouldn't have to change in the loop
             int amount = costMultiplier;
@@ -627,11 +587,11 @@ namespace EquivalentExchange
             bool didTransmuteFail = false;
 
             //loop for each transmute-cycle attempt
-            while (player.money >= totalCost && attemptedAmount > 0)
+            while (Game1.player.money >= totalCost && attemptedAmount > 0)
             {
-                double staminaCost = player.GetStaminaCostForTransmutation(actualValue);
+                double staminaCost = Alchemy.GetStaminaCostForTransmutation(actualValue);
                 //if the player lacks the stamina to execute a transmute, abort
-                if (player.Stamina <= staminaCost)
+                if (Game1.player.Stamina <= staminaCost)
                 {
                     attemptedAmount = 0;
                     continue;
@@ -639,27 +599,27 @@ namespace EquivalentExchange
 
                 //if we fail this check, it's because a rebound would kill the player.
                 //if the rebound chance is zero, this check will automatically pass.
-                if (!player.CanSurviveRebound(actualValue))
+                if (!Alchemy.CanSurviveRebound(actualValue))
                     continue;
 
                 //if we fail this check, transmutation will fail this cycle.
                 //this is our "rebound check"
-                if (player.DidPlayerFailReboundCheck())
+                if (Alchemy.DidPlayerFailReboundCheck())
                 {
-                    player.TakeDamageFromRebound(actualValue);
+                    Alchemy.TakeDamageFromRebound(actualValue);
                     didTransmuteFail = true;
                     //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
-                    if (!player.playerSaveData.HasConduitProfession)
+                    if (!instance.currentPlayerData.HasConduitProfession)
                         continue;
                 }
 
                 didTransmuteOccur = true;
 
                 //a rebound obviates a lucky transmute, but a profession trait obviates stamina drain when you rebound.
-                if (!didTransmuteFail && !player.playerSaveData.HasConduitProfession)
-                    player.HandleStaminaDeduction(staminaCost);
+                if (!didTransmuteFail && !instance.currentPlayerData.HasConduitProfession)
+                    Alchemy.HandleStaminaDeduction(staminaCost);
                 
-                player.Money -= totalCost;
+                Game1.player.Money -= totalCost;
 
                 Item spawnedItem = heldItem.getOne();
 
@@ -669,12 +629,12 @@ namespace EquivalentExchange
                     spawnedItem.addToStack(amount - 1);
                 }
 
-                Game1.createItemDebris(spawnedItem, player.getStandingPosition(), player.FacingDirection, (GameLocation)null);
+                Game1.createItemDebris(spawnedItem, Game1.player.getStandingPosition(), Game1.player.FacingDirection, (GameLocation)null);
 
                 //for right now, use the cost multiplier (number of cycles cognate) as the experience gained.
                 int experienceValue = costMultiplier;
 
-                player.AddAlchemyExperience(experienceValue);
+                Alchemy.AddAlchemyExperience(experienceValue);
             }
 
             //a transmute (at least one) happened, play the magicky sound
@@ -728,8 +688,7 @@ namespace EquivalentExchange
                 }
 
             }
-
-            //this.Monitor.Log($"Scanning item list:");
+            
             //iterate over game objects
             foreach (KeyValuePair<int, string> entry in Game1.objectInformation)
             {

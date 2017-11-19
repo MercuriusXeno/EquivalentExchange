@@ -9,7 +9,7 @@ using Microsoft.Xna.Framework;
 
 namespace EquivalentExchange
 {
-    public class AlchemistFarmer : StardewValley.Farmer
+    public class Alchemy
     {
         //constants for storing some important formula values as non-magic numbers, this is the impact level ups and other factors have on formulas, stored in constants for easy edits.
         public const double transmutationBonusPerLevel = 0.1D;
@@ -35,32 +35,21 @@ namespace EquivalentExchange
         //needed for rebound rolls
         public static Random alchemyRandom = new Random();
 
-        //save data for the mod's alchemy skill, in list form for per-player lookups.
-        public SaveDataModel playerSaveData = new SaveDataModel();
-
-        //constructor for keeping the player's data in this class.
-        public AlchemistFarmer (SaveDataModel playerData)
-        {
-            if (playerData == null)
-                playerData = new SaveDataModel();
-            this.playerSaveData = playerData;
-        }
-
         //increment alchemy experience and handle levelups if applicable
-        public void AddAlchemyExperience(int exp)
+        public static void AddAlchemyExperience(int exp)
         {
-            playerSaveData.AlchemyExperience += exp;
+            EquivalentExchange.instance.currentPlayerData.AlchemyExperience += exp;
 
-            while (playerSaveData.AlchemyLevel < 10 && playerSaveData.AlchemyExperience >= GetAlchemyExperienceNeededForNextLevel())
+            while (EquivalentExchange.instance.currentPlayerData.AlchemyLevel < 10 && EquivalentExchange.instance.currentPlayerData.AlchemyExperience >= GetAlchemyExperienceNeededForNextLevel())
             {
-                playerSaveData.AlchemyLevel++;
+                EquivalentExchange.instance.currentPlayerData.AlchemyLevel++;
                 //player gained a skilllevel, flag the night time skill up to appear.
-                EquivalentExchange.instance.AddSkillUpMenuAppearance(playerSaveData.AlchemyLevel);
+                EquivalentExchange.instance.AddSkillUpMenuAppearance(EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
             }
         }
 
         //overloaded method for how much experience is needed to reach a specific level.
-        public int GetAlchemyExperienceNeededForLevel(int level)
+        public static int GetAlchemyExperienceNeededForLevel(int level)
         {
             if (level > 0 && level < 11)
                 return alchemyExperienceNeededPerLevel[level - 1];
@@ -68,41 +57,41 @@ namespace EquivalentExchange
         }
 
         //how much experience is needed to reach next level
-        public int GetAlchemyExperienceNeededForNextLevel()
+        public static int GetAlchemyExperienceNeededForNextLevel()
         {
-            return GetAlchemyExperienceNeededForLevel(playerSaveData.AlchemyLevel + 1);
+            return GetAlchemyExperienceNeededForLevel(EquivalentExchange.instance.currentPlayerData.AlchemyLevel + 1);
         }
 
         //get the coefficient for stamina drain
-        public double GetAlchemyStaminaCostSkillMultiplier()
+        public static double GetAlchemyStaminaCostSkillMultiplier()
         {
             //base of 1 - 0.075 per skill level - profession modifiers
-            return 1 - (playerSaveData.AlchemyLevel * skillStaminaDrainImpactPerLevel) - (playerSaveData.HasSageProfession ? sageProfessionStaminaDrainBonus : 0.0F);
+            return 1 - (EquivalentExchange.instance.currentPlayerData.AlchemyLevel * skillStaminaDrainImpactPerLevel) - (EquivalentExchange.instance.currentPlayerData.HasSageProfession ? sageProfessionStaminaDrainBonus : 0.0F);
         }
 
         //algorithm to return stamina cost for the act of transmuting/liquidating an item, based on player skill and item value
-        public double GetStaminaCostForTransmutation(int itemValue)
+        public static double GetStaminaCostForTransmutation(int itemValue)
         {
             return Math.Sqrt(itemValue) * GetAlchemyStaminaCostSkillMultiplier();
         }
 
         //get the coefficient for item sell value
-        public double GetLiquidationValuePercentage()
+        public static double GetLiquidationValuePercentage()
         {
-            return GetLiquidationValuePercentage(playerSaveData.AlchemyLevel, playerSaveData.HasAurumancerProfession);
+            return GetLiquidationValuePercentage(EquivalentExchange.instance.currentPlayerData.AlchemyLevel, EquivalentExchange.instance.currentPlayerData.HasAurumancerProfession);
         }
 
         //get the coefficient for item price for transmutation
-        public double GetTransmutationMarkupPercentage()
+        public static double GetTransmutationMarkupPercentage()
         {
-            return GetTransmutationMarkupPercentage(playerSaveData.AlchemyLevel, playerSaveData.HasTransmuterProfession);
+            return GetTransmutationMarkupPercentage(EquivalentExchange.instance.currentPlayerData.AlchemyLevel, EquivalentExchange.instance.currentPlayerData.HasTransmuterProfession);
         }
 
         //the chance a player will fail to transmute/liquidate an item
-        public double GetReboundChance()
+        public static double GetReboundChance()
         {            
-            double distanceFactor = Math.Max(0D, DistanceCalculator.GetPathDistance(this.currentLocation) - this.playerSaveData.AlchemyLevel);            
-            double luckFactor = (this.LuckLevel * luckReboundImpact) + Game1.dailyLuck;
+            double distanceFactor = Math.Max(0D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation) - EquivalentExchange.instance.currentPlayerData.AlchemyLevel);            
+            double luckFactor = (Game1.player.LuckLevel * luckReboundImpact) + Game1.dailyLuck;
             return Math.Max(0, (baseReboundRate + distanceFactor) - luckFactor);
         }
 
@@ -124,51 +113,53 @@ namespace EquivalentExchange
         }
 
         //check if the player failed a rebound check
-        public bool DidPlayerFailReboundCheck()
+        public static bool DidPlayerFailReboundCheck()
         {             
             return alchemyRandom.NextDouble() <= GetReboundChance();
         }
 
 
         //get rebound damage based on item value. there is no resistance to this damage.
-        public int GetReboundDamage(int itemValue)
+        public static int GetReboundDamage(int itemValue)
         {
             return (int)Math.Ceiling(Math.Sqrt(itemValue));
         }
 
         //apply rebound damage to the player. A separate routine is responsible for playing the sound.
-        public void TakeDamageFromRebound(int itemValue)
+        public static void TakeDamageFromRebound(int itemValue)
         {
             int damage = GetReboundDamage(itemValue);
-            this.health -= damage;
-            this.currentLocation.debris.Add(new Debris(damage, new Vector2((float)(this.getStandingX() + 8), (float)this.getStandingY()), Color.Red, 1f, (Character)this));
+            Game1.player.health -= damage;
+            Game1.player.currentLocation.debris.Add(new Debris(damage, new Vector2((float)(Game1.player.getStandingX() + 8), (float)Game1.player.getStandingY()), Color.Red, 1f, (Character)Game1.player));
         }
 
         //check to see if the player could take a rebound without dying
-        public bool CanSurviveRebound(int itemValue)
+        public static bool CanSurviveRebound(int itemValue)
         {
+            GameLocation currentLocation = Game1.player.currentLocation;
             //automatically pass the chance if your current rebound chance is essentially zero.
             if (GetReboundChance() <= 0.0D)
                 return true;
             //otherwise fail this check if your health is lower than rebound damage, we don't let you kill yourself, but you can't transmute.
-            if (GetReboundDamage(itemValue) >= this.health)
+            if (GetReboundDamage(itemValue) >= Game1.player.health)
                 return false;
             //if we made it here we're healthy enough to take the damage that might happen.
             return true;
         }
 
         //lucky transmutes are basically transmutes that don't cost stamina. this is your chance to get one.
-        public double GetLuckyTransmuteChance()
+        public static double GetLuckyTransmuteChance()
         {
+            GameLocation currentLocation = Game1.player.currentLocation;
             //normalize luck to a non-negative between 1% and 25%, it increases based on a profession
-            double dailyLuck = (Game1.dailyLuck + luckNormalizationForFreeTransmutes) * (playerSaveData.HasShaperProfession ? shaperDailyLuckBonus : 1D);
+            double dailyLuck = (Game1.dailyLuck + luckNormalizationForFreeTransmutes) * (EquivalentExchange.instance.currentPlayerData.HasShaperProfession ? shaperDailyLuckBonus : 1D);
 
             double luckFactor = GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses();
 
             //player gets a lucky bonus based on proximity to an alchemy leyline
-            if (playerSaveData.HasAdeptProfession)
+            if (EquivalentExchange.instance.currentPlayerData.HasAdeptProfession)
             {
-                double distanceFactor = DistanceCalculator.GetPathDistance(this.currentLocation);
+                double distanceFactor = DistanceCalculator.GetPathDistance(currentLocation);
 
                 //current formula accounts for as much as a distance of 10 from the leyline.
                 //normalizes being on a 0 "distance" leyline as a 15% bonus lucky transmute chance.
@@ -179,46 +170,46 @@ namespace EquivalentExchange
             return luckFactor + dailyLuck;
         }
 
-        public double GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses()
+        public static double GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses()
         {
-            return GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(playerSaveData.AlchemyLevel, this.LuckLevel);
+            return GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(EquivalentExchange.instance.currentPlayerData.AlchemyLevel, Game1.player.LuckLevel);
         }
 
         //check to see if this is a lucky [free] transmute
-        public bool IsLuckyTransmute()
+        public static bool IsLuckyTransmute()
         {
             return alchemyRandom.NextDouble() <= GetLuckyTransmuteChance();
         }
 
         //handles draining stamina on successful transmute, and checking for lucky transmutes.
-        public void HandleStaminaDeduction(double staminaCost)
+        public static void HandleStaminaDeduction(double staminaCost)
         {
             if (IsLuckyTransmute())
                 return;
-            this.Stamina -= (float)staminaCost;
+            Game1.player.Stamina -= (float)staminaCost;
         }
 
-        internal void EnableAlchemistProfession(EquivalentExchange.Professions profession)
+        internal static void EnableAlchemistProfession(EquivalentExchange.Professions profession)
         {
             switch (profession)
             {
                 case EquivalentExchange.Professions.Shaper:
-                    playerSaveData.HasShaperProfession = true;
+                    EquivalentExchange.instance.currentPlayerData.HasShaperProfession = true;
                     break;
                 case EquivalentExchange.Professions.Sage:
-                    playerSaveData.HasSageProfession = true;
+                    EquivalentExchange.instance.currentPlayerData.HasSageProfession = true;
                     break;
                 case EquivalentExchange.Professions.Transmuter:
-                    playerSaveData.HasTransmuterProfession = true;
+                    EquivalentExchange.instance.currentPlayerData.HasTransmuterProfession = true;
                     break;
                 case EquivalentExchange.Professions.Adept:
-                    playerSaveData.HasAdeptProfession = true;
+                    EquivalentExchange.instance.currentPlayerData.HasAdeptProfession = true;
                     break;
                 case EquivalentExchange.Professions.Aurumancer:
-                    playerSaveData.HasAurumancerProfession = true;
+                    EquivalentExchange.instance.currentPlayerData.HasAurumancerProfession = true;
                     break;
                 case EquivalentExchange.Professions.Conduit:
-                    playerSaveData.HasConduitProfession = true;
+                    EquivalentExchange.instance.currentPlayerData.HasConduitProfession = true;
                     break;
             }
         }
