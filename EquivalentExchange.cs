@@ -35,11 +35,7 @@ namespace EquivalentExchange
 
         public static Texture2D alchemySkillIcon;
 
-        /*********
-        ** Public methods
-        *********/
-        /// <summary>The mod entry point, called after the mod is first loaded.</summary>
-        /// <param name="helper">Provides simplified APIs for writing mods.</param>
+        //handles all the things.
         public override void Entry(IModHelper helper)
         {
             //set the static instance variable. is this an oxymoron?
@@ -47,6 +43,9 @@ namespace EquivalentExchange
 
             //preserve this entry method's helper class because it's.. helpful.
             instance.eeHelper = helper;
+
+            //make sure the save directory exists, we need that.
+            InitializeSaveDirectory();
 
             //read the config file, poached from horse whistles, get the configured keys and settings
             Config = helper.ReadConfig<ConfigurationModel>();
@@ -83,9 +82,8 @@ namespace EquivalentExchange
                 GraphicsEvents.OnPostRenderHudEvent += GraphicsEvents_OnPostRenderHudEvent;
             }
 
-            //check for all professions mod: if it's here we run a wireup to give the player all skills professions at the right time, when present.
+            //check for all professions mod: if it's here we run a wireup to give the player all skills professions at the right time (or after), when present.
             CheckForAllProfessionsMod();
-
             if (hasAllProfessionsMod)
             {
                 LocationEvents.CurrentLocationChanged += LocationEvents_CurrentLocationChanged; ;
@@ -105,9 +103,7 @@ namespace EquivalentExchange
         }
 
         private void ShowEndOfNightLevelMenu()
-        {            
-            
-
+        {   
             if (showLevelUpMenusByRank.Count() > 0)
             {
                 for (int i = showLevelUpMenusByRank.Count() - 1; i >= 0; --i)
@@ -152,7 +148,7 @@ namespace EquivalentExchange
                     //skip this check in the future
                     instance.currentPlayerData.HasAllFirstRankProfessions = true;
                 }
-
+                
                 if (instance.currentPlayerData.AlchemyLevel >= 10 && !instance.currentPlayerData.HasAllSecondRankProfessions)
                 {
                     foreach(Professions professionNumber in secondRankProfessions)
@@ -264,12 +260,6 @@ namespace EquivalentExchange
             }
         }
 
-        //bit of helpful abstraction in dealing with cross-platform paths for save data.
-        private string GetSaveDirectory(StardewValley.Farmer player)
-        {
-            return Path.Combine(instance.eeHelper.DirectoryPath, "saveData", player.uniqueMultiplayerID.ToString(), ".json");
-        }
-
         //fires when loading a save, initializes the item blacklist and loads player save data.
         private void SaveEvents_AfterLoad(object sender, EventArgs e)
         {
@@ -277,21 +267,70 @@ namespace EquivalentExchange
             PopulateItemLibrary();
         }
 
-        //handles reading "each" player json file and loading them into memory
+        //convenience path-getter for the save data folder of Equivalent Exchange.
+        public string GetSaveDataPath()
+        {
+            return $"{instance.eeHelper.DirectoryPath}\\saveData\\"; ;
+        }
+
+        //used to generate a new multiplayer ID if the player's existing one is bogus.
+        public long RandomLong()
+        {
+            System.Random rd = new System.Random();
+            long min = long.MinValue;
+            long max = long.MaxValue;
+            ulong uRange = (ulong)(max - min);
+            ulong ulongRand;
+            do
+            {
+                byte[] buf = new byte[8];
+                rd.NextBytes(buf);
+                ulongRand = (ulong)BitConverter.ToInt64(buf, 0);
+            } while (ulongRand > ulong.MaxValue - ((ulong.MaxValue % uRange) + 1) % uRange);
+
+            return (long)(ulongRand % uRange) + min;
+        }
+
+        private const long DEFAULT_MULTIPLAYER_ID = -6666666;
+
+        //handles reading current player json file and loading them into memory
         private void InitializePlayerData()
         {
             // save is loaded
             if (Context.IsWorldReady)
-            {                
+            {
+                //this is quite a hack. If the player's uniqueMultiplayerID is a certain negative default, set it. We need to constrain uniqueness somehow.
+                if (Game1.player.uniqueMultiplayerID == -6666666)
+                {
+                    Game1.player.uniqueMultiplayerID = RandomLong();
+                }
+
                 //fetch each player's data, we're using it to populate a list, and using those to build custom player class instances.
-                instance.currentPlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>(GetSaveDirectory(Game1.player));                
+
+                instance.currentPlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>($"{GetSaveDataPath()}{Game1.player.uniqueMultiplayerID.ToString()}.json");                
+
+                //we want to generate the save data model, but we don't save it until we're supposed to, to prevent data from saving prematurely (thus generating a new multiplayer ID)
+                if (instance.currentPlayerData == null)
+                {                                        
+                    instance.currentPlayerData = new SaveDataModel(Game1.player.uniqueMultiplayerID);
+                }
             }
+        }
+
+        private void InitializeSaveDirectory()
+        {
+            Directory.CreateDirectory(GetSaveDataPath());
         }
 
         //handles writing "each" player's json save to the appropriate file.
         private void SaveEvents_BeforeSave(object sender, EventArgs e)
         {
-            instance.eeHelper.WriteJsonFile<SaveDataModel>(GetSaveDirectory(Game1.player), instance.currentPlayerData);
+            SavePlayerData();
+        }
+
+        private void SavePlayerData()
+        {
+            instance.eeHelper.WriteJsonFile<SaveDataModel>($"{ GetSaveDataPath() }{ Game1.player.uniqueMultiplayerID.ToString()}.json", instance.currentPlayerData);
         }
 
         //used to hold how many seconds to wait before the mod is allowed to play a transmutation sound
@@ -508,24 +547,25 @@ namespace EquivalentExchange
 
             while (attemptedAmount > 0)
             {
+                int amount = Math.Min(attemptedAmount, costMultiplier);
+
+                //we decrement the attempted amount before the anything occurs to prevent loop problems.
+                attemptedAmount -= amount;
+
                 double staminaCost = Alchemy.GetStaminaCostForTransmutation(actualValue);
 
                 //if the player lacks the stamina to execute a transmute, abort
                 if (Game1.player.Stamina <= staminaCost)
                 {
-                    attemptedAmount = 0;
                     continue;
                 }
-
-                int amount = Math.Min(attemptedAmount, costMultiplier);
-
-                //we decrement the attempted amount before the rebound occurs to mark that the attempt occurred.
-                attemptedAmount -= amount;
 
                 //if we fail this check, it's because a rebound would kill the player.
                 //if the rebound chance is zero, this check will automatically pass.
                 if (!Alchemy.CanSurviveRebound(actualValue))
+                {
                     continue;
+                }
 
                 //if we fail this check, transmutation will fail this cycle.
                 //this is our "rebound check"
@@ -589,18 +629,21 @@ namespace EquivalentExchange
             //loop for each transmute-cycle attempt
             while (Game1.player.money >= totalCost && attemptedAmount > 0)
             {
+                attemptedAmount -= amount;
+
                 double staminaCost = Alchemy.GetStaminaCostForTransmutation(actualValue);
                 //if the player lacks the stamina to execute a transmute, abort
                 if (Game1.player.Stamina <= staminaCost)
                 {
-                    attemptedAmount = 0;
                     continue;
                 }
 
                 //if we fail this check, it's because a rebound would kill the player.
                 //if the rebound chance is zero, this check will automatically pass.
                 if (!Alchemy.CanSurviveRebound(actualValue))
+                {
                     continue;
+                }
 
                 //if we fail this check, transmutation will fail this cycle.
                 //this is our "rebound check"
@@ -728,7 +771,7 @@ namespace EquivalentExchange
 
             hasAllProfessionsMod = true;
 
-            Log.info("[Equivalent Exchange] Experience Bars mod found, adding alchemy experience bar renderer.");       
+            Log.info("Experience Bars mod found, adding alchemy experience bar renderer.");       
         }
 
         private static bool hasAllProfessionsMod = false;
@@ -739,11 +782,11 @@ namespace EquivalentExchange
         {
             if (!eeHelper.ModRegistry.IsLoaded("community.AllProfessions"))
             {
-                Log.info("[Equivalent Exchange] All Professions not found.");
+                Log.info("All Professions not found.");
                 return;
             }
 
-            Log.info("[Equivalent Exchange] All Professions mod found. You will get every alchemy profession for your level.");
+            Log.info("All Professions mod found. You will get every alchemy profession for your level.");
             hasAllProfessionsMod = true;
         }
 

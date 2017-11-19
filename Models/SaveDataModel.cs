@@ -25,10 +25,11 @@ namespace EquivalentExchange
         public bool HasSageProfession { get; set; }
         public bool HasAurumancerProfession { get; set; }
         public bool HasConduitProfession { get; set; }
+        
 
-        public SaveDataModel()
+        public SaveDataModel(long playerID)
         {
-            PlayerID = 0;
+            PlayerID = playerID;
             AlchemyLevel = 0;
             AlchemyExperience = 0;
             HasAllFirstRankProfessions = false;
