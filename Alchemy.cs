@@ -12,23 +12,24 @@ namespace EquivalentExchange
     public class Alchemy
     {
         //constants for storing some important formula values as non-magic numbers, this is the impact level ups and other factors have on formulas, stored in constants for easy edits.
-        public const double transmutationBonusPerLevel = 0.1D;
-        public const double liquidationBonusPerLevel = 0.025D;
-        public const double skillStaminaDrainImpactPerLevel = 0.075D;
-        public const double sageProfessionStaminaDrainBonus = 0.15D;
-        public const double baseValueCoefficient = 0.5D;
-        public const double aurumancerLiquidationBonus = 0.25D;
-        public const double baseCostCoefficient = 3D;
-        public const double luckReboundImpact = 0.01D;
-        public const double baseReboundRate = 0.05D;
-        public const double transmuterTransmutationBonus = 1D;
-        public const double shaperDailyLuckBonus = 2D;
-        public const double luckNormalizationForFreeTransmutes = 0.13D;
-        public const double luckFreeTransmuteImpact = 0.01D;
-        public const double skillFreeTransmuteImpact = 0.03D;
-        public const double maxDistanceFactor = 10D;
-        public const double distanceBonusForLuckFactorNormalization = (200D / 3D);
-        public const double mapDistanceFactor = 0.05D;
+        public const double TRANSMUTATION_BONUS_PER_LEVEL = 0.1D;
+        public const double LIQUIDATION_BONUS_PER_LEVEL = 0.025D;
+        public const double SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL = 0.075D;
+        public const double SAGE_PROFESSION_STAMINA_DRAIN_BONUS = 0.15D;
+        public const double BASE_VALUE_COEFFICIENT = 0.5D;
+        public const double AURUMANCER_LIQUIDATION_BONUS = 0.25D;
+        public const double BASE_COST_COEFFICIENT = 3D;
+        public const double LUCK_REBOUND_IMPACT = 0.01D;
+        public const double BASE_REBOUND_RATE = 0.05D;
+        public const double TRANSMUTER_TRANSMUTATION_BONUS = 1D;
+        public const double SHAPER_DAILY_LUCK_BONUS = 2D;
+        public const double LUCK_NORMALIZATION_FOR_FREE_TRANSMUTES = 0.13D;
+        public const double LUCK_FREE_TRANSMUTE_IMPACT = 0.01D;
+        public const double SKILL_FREE_TRANSMUTE_IMPACT = 0.03D;
+        public const double MAX_DISTANCE_FACTOR = 10D;
+        public const double DISTANCE_BONUS_FOR_LUCK_FACTOR_NORMALIZATION = (200D / 3D);
+        public const double MAP_DISTANCE_FACTOR = 0.05D;
+        public const string LEYLINE_PROPERTY_INDICATOR = "AlchemyLeyline";
 
         //default experience progression values that I'm gonna try to balance around, somehow.
         public static readonly int[] alchemyExperienceNeededPerLevel = new int[] { 100, 380, 770, 1300, 2150, 3300, 4800, 6900, 10000, 15000 };
@@ -67,7 +68,7 @@ namespace EquivalentExchange
         public static double GetAlchemyStaminaCostSkillMultiplier()
         {
             //base of 1 - 0.075 per skill level - profession modifiers
-            return 1 - (EquivalentExchange.instance.currentPlayerData.AlchemyLevel * skillStaminaDrainImpactPerLevel) - (EquivalentExchange.instance.currentPlayerData.HasSageProfession ? sageProfessionStaminaDrainBonus : 0.0F);
+            return 1 - (EquivalentExchange.instance.currentPlayerData.AlchemyLevel * SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL) - (EquivalentExchange.instance.currentPlayerData.HasSageProfession ? SAGE_PROFESSION_STAMINA_DRAIN_BONUS : 0.0F);
         }
 
         //algorithm to return stamina cost for the act of transmuting/liquidating an item, based on player skill and item value
@@ -101,29 +102,29 @@ namespace EquivalentExchange
             double distanceFactor = Math.Max(0D, distance - EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
 
             //normalize distance factor - each map adds roughly 5% rebound, so dividing by 20D is what we're going for.
-            distanceFactor /= (1 / mapDistanceFactor);
+            distanceFactor /= (1 / MAP_DISTANCE_FACTOR);
 
             //calculate luck's impact on rebound
-            double luckFactor = (Game1.player.LuckLevel * luckReboundImpact) + Game1.dailyLuck;
+            double luckFactor = (Game1.player.LuckLevel * LUCK_REBOUND_IMPACT) + Game1.dailyLuck;
 
-            return Math.Max(0, (baseReboundRate + distanceFactor) - luckFactor);
+            return Math.Max(0, (BASE_REBOUND_RATE + distanceFactor) - luckFactor);
         }
 
         internal static double GetTransmutationMarkupPercentage(int whichLevel, bool hasTransmuterProfession)
         {
             //base of 3.0 - 0.1 per skill level - profession modifiers
-            return baseCostCoefficient - (transmutationBonusPerLevel * whichLevel) - (hasTransmuterProfession ? transmuterTransmutationBonus : 0.0F);
+            return BASE_COST_COEFFICIENT - (TRANSMUTATION_BONUS_PER_LEVEL * whichLevel) - (hasTransmuterProfession ? TRANSMUTER_TRANSMUTATION_BONUS : 0.0F);
         }
 
         internal static double GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(int whichLevel, int luckLevel)
         {
-            return (luckLevel * luckFreeTransmuteImpact) + (whichLevel * skillFreeTransmuteImpact);
+            return (luckLevel * LUCK_FREE_TRANSMUTE_IMPACT) + (whichLevel * SKILL_FREE_TRANSMUTE_IMPACT);
         }
 
         internal static double GetLiquidationValuePercentage(int whichLevel, bool hasAurumancerProfession)
         {
             //base of 0.5 + 0.03 per skill level + profession modifiers
-            return baseValueCoefficient + (liquidationBonusPerLevel * whichLevel) + (hasAurumancerProfession ? aurumancerLiquidationBonus : 0.0F);
+            return BASE_VALUE_COEFFICIENT + (LIQUIDATION_BONUS_PER_LEVEL * whichLevel) + (hasAurumancerProfession ? AURUMANCER_LIQUIDATION_BONUS : 0.0F);
         }
 
         //check if the player failed a rebound check
@@ -166,7 +167,7 @@ namespace EquivalentExchange
         {
             GameLocation currentLocation = Game1.player.currentLocation;
             //normalize luck to a non-negative between 1% and 25%, it increases based on a profession
-            double dailyLuck = (Game1.dailyLuck + luckNormalizationForFreeTransmutes) * (EquivalentExchange.instance.currentPlayerData.HasShaperProfession ? shaperDailyLuckBonus : 1D);
+            double dailyLuck = (Game1.dailyLuck + LUCK_NORMALIZATION_FOR_FREE_TRANSMUTES) * (EquivalentExchange.instance.currentPlayerData.HasShaperProfession ? SHAPER_DAILY_LUCK_BONUS : 1D);
 
             double luckFactor = GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses();
 
@@ -178,7 +179,7 @@ namespace EquivalentExchange
                 //current formula accounts for as much as a distance of 10 from the leyline.
                 //normalizes being on a 0 "distance" leyline as a 15% bonus lucky transmute chance.
                 //any distance factor farther than 10 receives 0% bonus. There are no penalties.
-                luckFactor += Math.Max((maxDistanceFactor - distanceFactor) / distanceBonusForLuckFactorNormalization, 0D);
+                luckFactor += Math.Max((MAX_DISTANCE_FACTOR - distanceFactor) / DISTANCE_BONUS_FOR_LUCK_FACTOR_NORMALIZATION, 0D);
             }            
             
             return luckFactor + dailyLuck;

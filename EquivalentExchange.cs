@@ -6,7 +6,7 @@ using StardewModdingAPI.Events;
 using StardewValley;
 using System.Linq;
 using Microsoft.Xna.Framework.Input;
-
+using xTile.ObjectModel;
 using EquivalentExchange.Models;
 using EquivalentExchange.Events;
 using System.IO;
@@ -87,7 +87,35 @@ namespace EquivalentExchange
             if (hasAllProfessionsMod)
             {
                 LocationEvents.CurrentLocationChanged += LocationEvents_CurrentLocationChanged; ;
-            }            
+            }
+
+            //add a debug option to give yourself experience
+            Helper.ConsoleCommands.Add("player_givealchemyexp", "player_givealchemyexp <amount>", GiveAlchemyExperience);
+        }
+
+        //command to give yourself experience for debug purposes primarily
+
+        private void GiveAlchemyExperience(object sender, string[] args)
+        {
+            if (args.Length != 1)
+            {
+                Log.info("Command format: giveAlchemyExp <amount>");
+                return;
+            }
+
+            int amt = 0;
+            try
+            {
+                amt = Convert.ToInt32(args[0]);
+            }
+            catch (Exception e)
+            {
+                Log.error("Bad experience amount.");
+                return;
+            }
+
+            Alchemy.AddAlchemyExperience(amt);
+            Log.info("Added " + amt + " alchemy experience.");
         }
 
         public List<int> showLevelUpMenusByRank = new List<int>();
@@ -260,10 +288,23 @@ namespace EquivalentExchange
             }
         }
 
+        //ensures that the wizard tower is a leyline for the mod by default.
+        private const string VANILLA_LEYLINE_LOCATION = "WizardHouse";
+        
+        private void InitializeVanillaLeyline()
+        {
+            if (Game1.getLocationFromName(VANILLA_LEYLINE_LOCATION) == null)
+                Log.error($"{VANILLA_LEYLINE_LOCATION} is missing, there is a very bad problem and you will not be going to space today.");
+            else
+                Game1.getLocationFromName(VANILLA_LEYLINE_LOCATION)?.map.Properties.Add(Alchemy.LEYLINE_PROPERTY_INDICATOR, 0F);
+            
+        }
+
         //fires when loading a save, initializes the item blacklist and loads player save data.
         private void SaveEvents_AfterLoad(object sender, EventArgs e)
         {
             InitializePlayerData();
+            InitializeVanillaLeyline();
             PopulateItemLibrary();
         }
 

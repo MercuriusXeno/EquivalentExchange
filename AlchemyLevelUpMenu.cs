@@ -127,12 +127,12 @@ namespace EquivalentExchange
 
         public List<string> GetExtraInfoForLevel(int whichLevel, int luckLevel, bool hasAurumancerProfession, bool hasTransmuterProfession)
         {
-            double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(whichLevel, hasTransmuterProfession) - Alchemy.transmutationBonusPerLevel) * 100D;
+            double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(whichLevel, hasTransmuterProfession) - Alchemy.TRANSMUTATION_BONUS_PER_LEVEL) * 100D;
             string coefficientCost = $"Transmutation Cost: {nextCoefficientCost.ToString()}%";
-            double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(whichLevel, hasAurumancerProfession) + Alchemy.liquidationBonusPerLevel) * 100D;
+            double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(whichLevel, hasAurumancerProfession) + Alchemy.LIQUIDATION_BONUS_PER_LEVEL) * 100D;
             string coefficientValue = $"Liquidation Value: {nextCoefficientValue.ToString()}%";
             double luckyTransmuteMinimum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + 0.01) * 100);
-            double luckyTransmuteMaximum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + Alchemy.luckNormalizationForFreeTransmutes) * 100);
+            double luckyTransmuteMaximum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + Alchemy.LUCK_NORMALIZATION_FOR_FREE_TRANSMUTES) * 100);
             string luckyTransmuteChance = $"Lucky Transmute Chance: {luckyTransmuteMinimum.ToString()}% to {luckyTransmuteMaximum.ToString()}%";
             string distanceFromTowerImpact = $"You can be { whichLevel } maps from an alchemical leyline (such as inside the Wizard's Tower) before rebounds become more likely.";
 
@@ -155,10 +155,10 @@ namespace EquivalentExchange
                     break;
                 case EquivalentExchange.Professions.Sage:                    
                     list.Add($"The base stamina cost of any transmutation is");
-                    list.Add($"reduced by a flat { (Alchemy.sageProfessionStaminaDrainBonus * 100D) }%");
+                    list.Add($"reduced by a flat { (Alchemy.SAGE_PROFESSION_STAMINA_DRAIN_BONUS * 100D) }%");
                     break;
                 case EquivalentExchange.Professions.Transmuter:
-                    double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(10, true) - Alchemy.transmuterTransmutationBonus) * 100D;                    
+                    double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(10, true) - Alchemy.TRANSMUTER_TRANSMUTATION_BONUS) * 100D;                    
                     list.Add($"Transmutation Cost reduced to { nextCoefficientCost.ToString() }%");
                     break;
                 case EquivalentExchange.Professions.Adept:                    
@@ -166,7 +166,7 @@ namespace EquivalentExchange
                     list.Add($"increase your chance of a lucky transmute (costing no stamina) by up to 15%.");
                     break;
                 case EquivalentExchange.Professions.Aurumancer:
-                    double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(10, true) + Alchemy.aurumancerLiquidationBonus) * 100D;                    
+                    double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(10, true) + Alchemy.AURUMANCER_LIQUIDATION_BONUS) * 100D;                    
                     list.Add($"Liquidation Value increased to { nextCoefficientValue.ToString() }%");
                     break;
                 case EquivalentExchange.Professions.Conduit:
