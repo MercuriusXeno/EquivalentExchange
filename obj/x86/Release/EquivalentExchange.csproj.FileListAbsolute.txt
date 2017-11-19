@@ -1,6 +1,0 @@
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\bin\x86\Release\EquivalentExchange.dll
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\bin\x86\Release\EquivalentExchange.pdb
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\obj\x86\Release\EquivalentExchange.csprojResolveAssemblyReference.cache
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\obj\x86\Release\EquivalentExchange.csproj.CoreCompileInputs.cache
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\obj\x86\Release\EquivalentExchange.dll
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\obj\x86\Release\EquivalentExchange.pdb

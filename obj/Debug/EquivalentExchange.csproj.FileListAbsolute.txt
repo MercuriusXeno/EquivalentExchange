@@ -1,5 +1,0 @@
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\bin\Debug\EquivalentExchange.dll
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\bin\Debug\EquivalentExchange.pdb
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\obj\Debug\EquivalentExchange.csproj.CoreCompileInputs.cache
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\obj\Debug\EquivalentExchange.dll
-D:\EquivalentExchange\EquivalentExchange\EquivalentExchange\obj\Debug\EquivalentExchange.pdb
