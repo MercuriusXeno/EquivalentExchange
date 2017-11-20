@@ -13,12 +13,13 @@ using System.IO;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework;
 using System.Reflection;
+using StardewValley.Menus;
 
 namespace EquivalentExchange
 {
 
     /// <summary>The mod entry point.</summary>
-    public class EquivalentExchange : Mod
+    public class EquivalentExchange : Mod, IAssetEditor
     {
         //instantiate config
         private ConfigurationModel Config;
@@ -91,9 +92,248 @@ namespace EquivalentExchange
             //add a debug option to give yourself experience
             Helper.ConsoleCommands.Add("player_givealchemyexp", "player_givealchemyexp <amount>", GiveAlchemyExperience);
 
+            //post render event for skills menu
+            GraphicsEvents.OnPostRenderGuiEvent += DrawAfterGUI;
+
+            //check for chase's skills
+            checkForLuck();
+            checkForCooking();
+
             //harmony patch
             var harmony = HarmonyInstance.Create("MercuriusXeno.EquivalentExchange");
-            harmony.PatchAll(Assembly.GetExecutingAssembly());
+            harmony.PatchAll(Assembly.GetExecutingAssembly());     
+        }
+
+        //integration considerations for chase's skills
+        
+        private static bool hasLuck = false;
+        private void checkForLuck()
+        {
+            if (!Helper.ModRegistry.IsLoaded("spacechase0.LuckSkill"))
+            {
+                Log.info("Luck Skill not found");
+                return;
+            }
+            
+            hasLuck = true;
+        }
+
+        private static bool hasCooking = false;
+        private void checkForCooking()
+        {
+            if (!Helper.ModRegistry.IsLoaded("spacechase0.CookingSkill"))
+            {
+                Log.info("Cooking Skill not found");
+                return;
+            }
+            
+            hasCooking = true;
+        }
+
+        private bool didInitSkills = false;
+        private void DrawAfterGUI(object sender, EventArgs args)
+        {
+            if (Game1.activeClickableMenu is GameMenu)
+            {
+                GameMenu menu = Game1.activeClickableMenu as GameMenu;
+                if (menu.currentTab == GameMenu.skillsTab)
+                {
+                    var tabs = (List<IClickableMenu>)Util.GetInstanceField(typeof(GameMenu), menu, "pages");
+                    var skills = (SkillsPage)tabs[GameMenu.skillsTab];
+
+                    if (!didInitSkills)
+                    {
+                        InitAlchemySkill(skills);
+                        didInitSkills = true;
+                    }
+                    DrawAlchemySkill(skills);
+                }
+            }
+            else didInitSkills = false;
+        }
+
+        //return first match on professions for levels 5 and 10
+        private List<Professions> GetProfessionsForSkillLevel(int whichLevel)
+        {
+            List<Professions> obtainedProfessionsAtLevel = new List<Professions>();
+            switch (whichLevel)
+            {
+                case 5:
+                    if (Game1.player.professions.Contains((int)Professions.Sage))
+                        obtainedProfessionsAtLevel.Add(Professions.Sage);
+                    if (Game1.player.professions.Contains((int)Professions.Shaper))
+                        obtainedProfessionsAtLevel.Add(Professions.Shaper);
+                    break;
+                default:
+                    if (Game1.player.professions.Contains((int)Professions.Transmuter))
+                        obtainedProfessionsAtLevel.Add(Professions.Transmuter);
+                    if (Game1.player.professions.Contains((int)Professions.Adept))
+                        obtainedProfessionsAtLevel.Add(Professions.Adept);
+                    if (Game1.player.professions.Contains((int)Professions.Aurumancer))
+                        obtainedProfessionsAtLevel.Add(Professions.Aurumancer);
+                    if (Game1.player.professions.Contains((int)Professions.Conduit))
+                        obtainedProfessionsAtLevel.Add(Professions.Conduit);
+                    break;
+            }
+            return obtainedProfessionsAtLevel;
+        }
+        
+        private int getProfessionForSkill(int level)
+        {
+            if (level != 5 && level != 10)
+                return -1;
+
+            List<int> list = (level == 5 ? firstRankProfessions : secondRankProfessions);
+            foreach (int prof in list)
+            {
+                if (Game1.player.professions.Contains(prof))
+                    return prof;
+            }
+
+            return -1;
+        }
+        
+
+        public bool CanEdit<T>(IAssetInfo asset)
+        {
+            return asset.AssetNameEquals(@"Strings\UI");
+        }
+
+        public void Edit<T>(IAssetData asset)
+        {
+            //debug, lets me look in the object
+            var data = asset.Data;
+            foreach (int i in firstRankProfessions)
+            {
+                asset
+                    .AsDictionary<string, string>()
+                    .Set("LevelUp_ProfessionName_" + AlchemyLevelUpMenu.GetProfessionName(i), AlchemyLevelUpMenu.GetProfessionName(i));
+            }
+            foreach (int i in secondRankProfessions)
+            {
+                asset
+                    .AsDictionary<string, string>()
+                    .Set("LevelUp_ProfessionName_" + AlchemyLevelUpMenu.GetProfessionName(i), AlchemyLevelUpMenu.GetProfessionName(i));
+            }
+        }
+
+        private void InitAlchemySkill(SkillsPage skills)
+        {
+            int alchemyLevel = currentPlayerData.AlchemyLevel;
+
+            // Bunch of stuff from the constructor
+            int num2 = 0;
+            int num3 = skills.xPositionOnScreen + IClickableMenu.borderWidth + IClickableMenu.spaceToClearTopBorder + 4 * Game1.tileSize - Game1.pixelZoom;
+            int num4 = skills.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + IClickableMenu.borderWidth - Game1.pixelZoom * 3;
+            for (int i = 4; i < 10; i += 5)
+            {
+                int j = 5;
+                if (hasLuck)
+                    j++;
+                if (hasCooking)
+                    j++;
+
+                string text = "";
+                string text2 = "";
+                bool flag = false;
+                
+                flag = (alchemyLevel > i);
+                
+                //that said, the chosen profession is needed for.. something?
+                int chosenProfessionNumber = getProfessionForSkill(i + 1);
+
+                object[] args = new object[] { text, text2, AlchemyLevelUpMenu.getProfessionDescription(chosenProfessionNumber) };
+                Util.CallInstanceMethod(typeof(SkillsPage), skills, "parseProfessionDescription", args);
+                text = (string)args[0];
+                text2 = (string)args[1];
+
+                if (flag && (i + 1) % 5 == 0)
+                {
+                    var skillBars = (List<ClickableTextureComponent>)Util.GetInstanceField(typeof(SkillsPage), skills, "skillBars");
+                    skillBars.Add(new ClickableTextureComponent(string.Concat(chosenProfessionNumber), new Rectangle(num2 + num3 - Game1.pixelZoom + i * (Game1.tileSize / 2 + Game1.pixelZoom), num4 + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6), 14 * Game1.pixelZoom, 9 * Game1.pixelZoom), null, text, GetProfessionTexture(chosenProfessionNumber), new Rectangle(0, 0, 16, 16), (float)Game1.pixelZoom, true));
+                }
+                num2 += Game1.pixelZoom * 6;
+            }
+            int k = 5;
+            if (hasLuck)
+                k++;
+            if (hasCooking)
+                k++;
+            int num6 = k;
+            if (num6 == 1)
+            {
+                num6 = 3;
+            }
+            else if (num6 == 3)
+            {
+                num6 = 1;
+            }
+            string text3 = "";
+            var skillAreas = (List<ClickableTextureComponent>)Util.GetInstanceField(typeof(SkillsPage), skills, "skillAreas");
+            skillAreas.Add(new ClickableTextureComponent(string.Concat(num6), new Rectangle(num3 - Game1.tileSize * 2 - Game1.tileSize * 3 / 4, num4 + k * (Game1.tileSize / 2 + Game1.pixelZoom * 6), Game1.tileSize * 2 + Game1.pixelZoom * 5, 9 * Game1.pixelZoom), string.Concat(num6), text3, null, Rectangle.Empty, 1f, false));
+        }
+
+        private void DrawAlchemySkill(SkillsPage skills)
+        {
+            int level = currentPlayerData.AlchemyLevel;
+
+            SpriteBatch b = Game1.spriteBatch;
+            int j = 5;
+            if (hasLuck)
+                j++;
+            if (hasCooking)
+                j++;
+
+            int num;
+            int num2;
+
+            num = skills.xPositionOnScreen + IClickableMenu.borderWidth + IClickableMenu.spaceToClearTopBorder + 4 * Game1.tileSize - 8;
+            num2 = skills.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + IClickableMenu.borderWidth - Game1.pixelZoom * 2;
+
+            int num3 = 0;
+            for (int i = 0; i < 10; i++)
+            {
+                bool flag = false;
+                bool flag2 = false;
+                string text = "";
+                int num4 = 0;
+                Rectangle empty = Rectangle.Empty;
+
+                flag = (level > i);
+                if (i == 0)
+                {
+                    text = "Alchemy";
+                }
+                num4 = level;
+                flag2 = false;
+                empty = new Rectangle(140, 512, 13, 16);
+
+                if (!text.Equals(""))
+                {
+                    b.DrawString(Game1.smallFont, text, new Vector2((float)num - Game1.smallFont.MeasureString(text).X - (float)(Game1.pixelZoom * 4) - (float)Game1.tileSize, (float)(num2 + Game1.pixelZoom + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6))), Game1.textColor);
+                    b.Draw(Game1.mouseCursors, new Vector2((float)(num - Game1.pixelZoom * 16), (float)(num2 + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6))), new Rectangle?(empty), Color.Black * 0.3f, 0f, Vector2.Zero, (float)Game1.pixelZoom * 0.75f, SpriteEffects.None, 0.85f);
+                    b.Draw(Game1.mouseCursors, new Vector2((float)(num - Game1.pixelZoom * 15), (float)(num2 - Game1.pixelZoom + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6))), new Rectangle?(empty), Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom * 0.75f, SpriteEffects.None, 0.87f);
+                }
+                if (!flag && (i + 1) % 5 == 0)
+                {
+                    b.Draw(Game1.mouseCursors, new Vector2((float)(num3 + num - Game1.pixelZoom + i * (Game1.tileSize / 2 + Game1.pixelZoom)), (float)(num2 + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6))), new Rectangle?(new Rectangle(145, 338, 14, 9)), Color.Black * 0.35f, 0f, Vector2.Zero, (float)Game1.pixelZoom, SpriteEffects.None, 0.87f);
+                    b.Draw(Game1.mouseCursors, new Vector2((float)(num3 + num + i * (Game1.tileSize / 2 + Game1.pixelZoom)), (float)(num2 - Game1.pixelZoom + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6))), new Rectangle?(new Rectangle(145 + (flag ? 14 : 0), 338, 14, 9)), Color.White * (flag ? 1f : 0.65f), 0f, Vector2.Zero, (float)Game1.pixelZoom, SpriteEffects.None, 0.87f);
+                }
+                else if ((i + 1) % 5 != 0)
+                {
+                    b.Draw(Game1.mouseCursors, new Vector2((float)(num3 + num - Game1.pixelZoom + i * (Game1.tileSize / 2 + Game1.pixelZoom)), (float)(num2 + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6))), new Rectangle?(new Rectangle(129, 338, 8, 9)), Color.Black * 0.35f, 0f, Vector2.Zero, (float)Game1.pixelZoom, SpriteEffects.None, 0.85f);
+                    b.Draw(Game1.mouseCursors, new Vector2((float)(num3 + num + i * (Game1.tileSize / 2 + Game1.pixelZoom)), (float)(num2 - Game1.pixelZoom + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6))), new Rectangle?(new Rectangle(129 + (flag ? 8 : 0), 338, 8, 9)), Color.White * (flag ? 1f : 0.65f), 0f, Vector2.Zero, (float)Game1.pixelZoom, SpriteEffects.None, 0.87f);
+                }
+                if (i == 9)
+                {
+                    NumberSprite.draw(num4, b, new Vector2((float)(num3 + num + (i + 2) * (Game1.tileSize / 2 + Game1.pixelZoom) + Game1.pixelZoom * 3 + ((num4 >= 10) ? (Game1.pixelZoom * 3) : 0)), (float)(num2 + Game1.pixelZoom * 4 + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6))), Color.Black * 0.35f, 1f, 0.85f, 1f, 0, 0);
+                    NumberSprite.draw(num4, b, new Vector2((float)(num3 + num + (i + 2) * (Game1.tileSize / 2 + Game1.pixelZoom) + Game1.pixelZoom * 4 + ((num4 >= 10) ? (Game1.pixelZoom * 3) : 0)), (float)(num2 + Game1.pixelZoom * 3 + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6))), (flag2 ? Color.LightGreen : Color.SandyBrown) * ((num4 == 0) ? 0.75f : 1f), 1f, 0.87f, 1f, 0, 0);
+                }
+                if ((i + 1) % 5 == 0)
+                {
+                    num3 += Game1.pixelZoom * 6;
+                }
+            }
         }
 
         //command to give yourself experience for debug purposes primarily
@@ -145,11 +385,11 @@ namespace EquivalentExchange
                 }
                 showLevelUpMenusByRank.Clear();
             }
-            else if (currentPlayerData.AlchemyLevel >= 5 && !instance.currentPlayerData.HasShaperProfession && !instance.currentPlayerData.HasSageProfession)
+            else if (currentPlayerData.AlchemyLevel >= 5 && !Game1.player.professions.Contains((int)Professions.Shaper) && !Game1.player.professions.Contains((int)Professions.Sage))
             {
                 Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, 5));
             }
-            else if (currentPlayerData.AlchemyLevel >= 10 && !instance.currentPlayerData.HasTransmuterProfession && !instance.currentPlayerData.HasAdeptProfession && !instance.currentPlayerData.HasAurumancerProfession && !instance.currentPlayerData.HasConduitProfession)
+            else if (currentPlayerData.AlchemyLevel >= 10 && !Game1.player.professions.Contains((int)Professions.Transmuter) && !Game1.player.professions.Contains((int)Professions.Adept) && !Game1.player.professions.Contains((int)Professions.Aurumancer) && !Game1.player.professions.Contains((int)Professions.Conduit))
             {            
                 Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, 10));
             }
@@ -160,54 +400,23 @@ namespace EquivalentExchange
         {
             if (hasAllProfessionsMod)
             {
-                if (instance.currentPlayerData.AlchemyLevel >= 5)
+                List<int> professions = Game1.player.professions;
+                List<List<int>> list = new List<List<int>> { firstRankProfessions, secondRankProfessions };
+                foreach (List<int> current in list)
                 {
-                    foreach(Professions professionNumber in firstRankProfessions)
+                    bool flag = professions.Intersect(current).Any<int>();
+                    if (flag)
                     {
-                        switch (professionNumber)
+                        foreach (int current2 in current)
                         {
-                            case Professions.Shaper:
-                                if (!instance.currentPlayerData.HasShaperProfession)
-                                    instance.currentPlayerData.HasShaperProfession = true;
-                                break;
-                            case Professions.Sage:
-                                if (!instance.currentPlayerData.HasSageProfession)
-                                    instance.currentPlayerData.HasSageProfession = true;
-                                break;
+                            bool flag2 = !professions.Contains(current2);
+                            if (flag2)
+                            {
+                                professions.Add(current2);
+                            }
                         }
                     }
-                    //skip this check in the future
-                    instance.currentPlayerData.HasAllFirstRankProfessions = true;
                 }
-                
-                if (instance.currentPlayerData.AlchemyLevel >= 10 && !instance.currentPlayerData.HasAllSecondRankProfessions)
-                {
-                    foreach(Professions professionNumber in secondRankProfessions)
-                    {
-                        switch (professionNumber)
-                        {
-                            case Professions.Transmuter:
-                                if (!instance.currentPlayerData.HasTransmuterProfession)
-                                    instance.currentPlayerData.HasTransmuterProfession = true;
-                                break;
-                            case Professions.Adept:
-                                if (!instance.currentPlayerData.HasAdeptProfession)
-                                    instance.currentPlayerData.HasAdeptProfession = true;
-                                break;
-                            case Professions.Aurumancer:
-                                if (!instance.currentPlayerData.HasAurumancerProfession)
-                                    instance.currentPlayerData.HasAurumancerProfession = true;
-                                break;
-                            case Professions.Conduit:
-                                if (!instance.currentPlayerData.HasConduitProfession)
-                                    instance.currentPlayerData.HasConduitProfession = true;
-                                break;
-                             
-                        }
-                    }
-                    //skip this check in the future
-                    instance.currentPlayerData.HasAllSecondRankProfessions = true;
-                }                
             }
         }
 
@@ -299,21 +508,21 @@ namespace EquivalentExchange
             alchemyConduitIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.ConduitIcon}");
         }
 
-        internal static Texture2D GetProfessionTexture(Professions professions)
+        internal static Texture2D GetProfessionTexture(int profession)
         {
-            switch (professions)
+            switch (profession)
             {
-                case Professions.Shaper:
+                case (int)Professions.Shaper:
                     return alchemyShaperIcon;
-                case Professions.Sage:
+                case (int)Professions.Sage:
                     return alchemySageIcon;
-                case Professions.Transmuter:
+                case (int)Professions.Transmuter:
                     return alchemyTransmuterIcon;
-                case Professions.Adept:
+                case (int)Professions.Adept:
                     return alchemyAdeptIcon;
-                case Professions.Aurumancer:
+                case (int)Professions.Aurumancer:
                     return alchemyAurumancerIcon;
-                case Professions.Conduit:
+                case (int)Professions.Conduit:
                     return alchemyConduitIcon;
             }
             return alchemySkillIconBordered;
@@ -530,6 +739,10 @@ namespace EquivalentExchange
         //handles the key press event for figuring out if control or shift is held down, or either of the mod's major transmutation actions is being attempted.
         private void ControlEvents_KeyPressed(object sender, EventArgsKeyPressed e)
         {
+            //debug REMOVE ME
+            if (e.KeyPressed == Keys.F5)
+                Alchemy.AddAlchemyExperience(5000);
+
             if (modifyingControlKeys.Contains(e.KeyPressed))
             {
                 SetModifyingControlKeyState(e.KeyPressed, true);
@@ -648,7 +861,7 @@ namespace EquivalentExchange
                     Alchemy.TakeDamageFromRebound(actualValue);
                     didTransmuteFail = true;
                     //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
-                    if (!instance.currentPlayerData.HasConduitProfession)
+                    if (!Game1.player.professions.Contains((int)Professions.Conduit))
                         continue;
                 }
 
@@ -656,7 +869,7 @@ namespace EquivalentExchange
                 didTransmuteOccur = true;
 
                 //a rebound obviates a lucky transmute, but a profession trait obviates stamina drain when you rebound.
-                if (!didTransmuteFail && !instance.currentPlayerData.HasConduitProfession)
+                if (!didTransmuteFail && !Game1.player.professions.Contains((int)Professions.Conduit))
                     Alchemy.HandleStaminaDeduction(staminaCost);
 
                 //we floor the math here because we don't want weirdly divergent values based on stack count - the rate is fixed regardless of quantity
@@ -727,14 +940,14 @@ namespace EquivalentExchange
                     Alchemy.TakeDamageFromRebound(actualValue);
                     didTransmuteFail = true;
                     //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
-                    if (!instance.currentPlayerData.HasConduitProfession)
+                    if (!Game1.player.professions.Contains((int)Professions.Conduit))
                         continue;
                 }
 
                 didTransmuteOccur = true;
 
                 //a rebound obviates a lucky transmute, but a profession trait obviates stamina drain when you rebound.
-                if (!didTransmuteFail && !instance.currentPlayerData.HasConduitProfession)
+                if (!didTransmuteFail && !Game1.player.professions.Contains((int)Professions.Conduit))
                     Alchemy.HandleStaminaDeduction(staminaCost);
                 
                 Game1.player.Money -= totalCost;
@@ -851,8 +1064,8 @@ namespace EquivalentExchange
 
         private static bool hasAllProfessionsMod = false;
 
-        private Professions[] firstRankProfessions = { Professions.Shaper, Professions.Sage };
-        private Professions[] secondRankProfessions = { Professions.Transmuter, Professions.Adept, Professions.Aurumancer, Professions.Conduit };
+        private List<int> firstRankProfessions = new List<int>{ (int)Professions.Shaper, (int)Professions.Sage };
+        private List<int> secondRankProfessions = new List<int>{ (int)Professions.Transmuter, (int)Professions.Adept, (int)Professions.Aurumancer, (int)Professions.Conduit };
         private void CheckForAllProfessionsMod()
         {
             if (!eeHelper.ModRegistry.IsLoaded("community.AllProfessions"))
@@ -865,14 +1078,36 @@ namespace EquivalentExchange
             hasAllProfessionsMod = true;
         }
 
-        public enum Professions
-        { 
-            Shaper,
-            Sage,
-            Transmuter,
-            Adept,
-            Aurumancer,
-            Conduit
+        public enum Professions : int
+        {
+            Default = 0,
+            Shaper = 61,
+            Sage = 62,
+            Transmuter = 63,
+            Adept = 64,
+            Aurumancer = 65,
+            Conduit = 66
+        }
+
+        private Professions GetProfessionFromNumber(int chosenProfessionNumber)
+        {
+            switch (chosenProfessionNumber)
+            {
+                case 61:
+                    return Professions.Shaper;
+                case 62:
+                    return Professions.Sage;
+                case 63:
+                    return Professions.Transmuter;
+                case 64:
+                    return Professions.Adept;
+                case 65:
+                    return Professions.Aurumancer;
+                case 66:
+                    return Professions.Conduit;
+                default:
+                    return Professions.Default;
+            }
         }
     }
 }

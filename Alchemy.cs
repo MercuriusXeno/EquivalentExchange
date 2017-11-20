@@ -68,7 +68,7 @@ namespace EquivalentExchange
         public static double GetAlchemyStaminaCostSkillMultiplier()
         {
             //base of 1 - 0.075 per skill level - profession modifiers
-            return 1 - (EquivalentExchange.instance.currentPlayerData.AlchemyLevel * SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL) - (EquivalentExchange.instance.currentPlayerData.HasSageProfession ? SAGE_PROFESSION_STAMINA_DRAIN_BONUS : 0.0F);
+            return 1 - (EquivalentExchange.instance.currentPlayerData.AlchemyLevel * SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL) - (Game1.player.professions.Contains((int)EquivalentExchange.Professions.Sage) ? SAGE_PROFESSION_STAMINA_DRAIN_BONUS : 0.0F);
         }
 
         //algorithm to return stamina cost for the act of transmuting/liquidating an item, based on player skill and item value
@@ -80,13 +80,13 @@ namespace EquivalentExchange
         //get the coefficient for item sell value
         public static double GetLiquidationValuePercentage()
         {
-            return GetLiquidationValuePercentage(EquivalentExchange.instance.currentPlayerData.AlchemyLevel, EquivalentExchange.instance.currentPlayerData.HasAurumancerProfession);
+            return GetLiquidationValuePercentage(EquivalentExchange.instance.currentPlayerData.AlchemyLevel, Game1.player.professions.Contains((int)EquivalentExchange.Professions.Aurumancer));
         }
 
         //get the coefficient for item price for transmutation
         public static double GetTransmutationMarkupPercentage()
         {
-            return GetTransmutationMarkupPercentage(EquivalentExchange.instance.currentPlayerData.AlchemyLevel, EquivalentExchange.instance.currentPlayerData.HasTransmuterProfession);
+            return GetTransmutationMarkupPercentage(EquivalentExchange.instance.currentPlayerData.AlchemyLevel, Game1.player.professions.Contains((int)EquivalentExchange.Professions.Transmuter));
         }
 
         //the chance a player will fail to transmute/liquidate an item
@@ -167,12 +167,12 @@ namespace EquivalentExchange
         {
             GameLocation currentLocation = Game1.player.currentLocation;
             //normalize luck to a non-negative between 1% and 25%, it increases based on a profession
-            double dailyLuck = (Game1.dailyLuck + LUCK_NORMALIZATION_FOR_FREE_TRANSMUTES) * (EquivalentExchange.instance.currentPlayerData.HasShaperProfession ? SHAPER_DAILY_LUCK_BONUS : 1D);
+            double dailyLuck = (Game1.dailyLuck + LUCK_NORMALIZATION_FOR_FREE_TRANSMUTES) * (Game1.player.professions.Contains((int)EquivalentExchange.Professions.Shaper) ? SHAPER_DAILY_LUCK_BONUS : 1D);
 
             double luckFactor = GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses();
 
             //player gets a lucky bonus based on proximity to an alchemy leyline
-            if (EquivalentExchange.instance.currentPlayerData.HasAdeptProfession)
+            if (Game1.player.professions.Contains((int)EquivalentExchange.Professions.Adept))
             {
                 double distanceFactor = DistanceCalculator.GetPathDistance(currentLocation);
 
@@ -204,27 +204,34 @@ namespace EquivalentExchange
             Game1.player.Stamina -= (float)staminaCost;
         }
 
-        internal static void EnableAlchemistProfession(EquivalentExchange.Professions profession)
+        //called when selecting a profession from the level up menu, sets the chosen profession for icon purposes.
+        internal static void EnableAlchemistProfession(int profession)
         {
             switch (profession)
             {
-                case EquivalentExchange.Professions.Shaper:
-                    EquivalentExchange.instance.currentPlayerData.HasShaperProfession = true;
+                case (int)EquivalentExchange.Professions.Shaper:
+                    Game1.player.professions.Add((int)EquivalentExchange.Professions.Shaper);
+                    //EquivalentExchange.instance.currentPlayerData.ChosenRankFiveProfession = (int)EquivalentExchange.Professions.Shaper;
                     break;
-                case EquivalentExchange.Professions.Sage:
-                    EquivalentExchange.instance.currentPlayerData.HasSageProfession = true;
+                case (int)EquivalentExchange.Professions.Sage:
+                    Game1.player.professions.Add((int)EquivalentExchange.Professions.Sage);
+                    //EquivalentExchange.instance.currentPlayerData.ChosenRankFiveProfession = (int)EquivalentExchange.Professions.Sage;
                     break;
-                case EquivalentExchange.Professions.Transmuter:
-                    EquivalentExchange.instance.currentPlayerData.HasTransmuterProfession = true;
+                case (int)EquivalentExchange.Professions.Transmuter:
+                    Game1.player.professions.Add((int)EquivalentExchange.Professions.Transmuter);
+                    //EquivalentExchange.instance.currentPlayerData.ChosenRankTenProfession = (int)EquivalentExchange.Professions.Transmuter;
                     break;
-                case EquivalentExchange.Professions.Adept:
-                    EquivalentExchange.instance.currentPlayerData.HasAdeptProfession = true;
+                case (int)EquivalentExchange.Professions.Adept:
+                    Game1.player.professions.Add((int)EquivalentExchange.Professions.Adept);
+                    //EquivalentExchange.instance.currentPlayerData.ChosenRankTenProfession = (int)EquivalentExchange.Professions.Adept;
                     break;
-                case EquivalentExchange.Professions.Aurumancer:
-                    EquivalentExchange.instance.currentPlayerData.HasAurumancerProfession = true;
+                case (int)EquivalentExchange.Professions.Aurumancer:
+                    Game1.player.professions.Add((int)EquivalentExchange.Professions.Aurumancer);
+                    //EquivalentExchange.instance.currentPlayerData.ChosenRankTenProfession = (int)EquivalentExchange.Professions.Aurumancer;
                     break;
-                case EquivalentExchange.Professions.Conduit:
-                    EquivalentExchange.instance.currentPlayerData.HasConduitProfession = true;
+                case (int)EquivalentExchange.Professions.Conduit:
+                    Game1.player.professions.Add((int)EquivalentExchange.Professions.Conduit);
+                    //EquivalentExchange.instance.currentPlayerData.ChosenRankTenProfession = (int)EquivalentExchange.Professions.Conduit;
                     break;
             }
         }

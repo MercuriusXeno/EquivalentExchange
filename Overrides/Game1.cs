@@ -7,7 +7,6 @@ using StardewValley;
 
 namespace EquivalentExchange.Overrides
 {
-
     [HarmonyPatch(typeof(StardewValley.Game1))]
     [HarmonyPatch("showEndOfNightStuff")]
     public class ShowOvernightEventHook
