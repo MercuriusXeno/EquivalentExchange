@@ -12,6 +12,7 @@ using EquivalentExchange.Events;
 using System.IO;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework;
+using System.Reflection;
 
 namespace EquivalentExchange
 {
@@ -32,8 +33,6 @@ namespace EquivalentExchange
 
         //config for if the mod is allowed to play sounds
         public static bool canPlaySounds;
-
-        public static Texture2D alchemySkillIcon;
 
         //handles all the things.
         public override void Entry(IModHelper helper)
@@ -91,6 +90,10 @@ namespace EquivalentExchange
 
             //add a debug option to give yourself experience
             Helper.ConsoleCommands.Add("player_givealchemyexp", "player_givealchemyexp <amount>", GiveAlchemyExperience);
+
+            //harmony patch
+            var harmony = HarmonyInstance.Create("MercuriusXeno.EquivalentExchange");
+            harmony.PatchAll(Assembly.GetExecutingAssembly());
         }
 
         //command to give yourself experience for debug purposes primarily
@@ -260,51 +263,82 @@ namespace EquivalentExchange
             }
         }
 
-        public static string assetPrefix = "assets\\";
         public struct Icons
         {
-            public static string SkillIcon = $"{assetPrefix}alchemySkillIcon.png";
-            public static string ShaperIcon = $"{assetPrefix}shaperProfessionIcon_Hybrid.png";
-            public static string TransmuterIcon = $"{assetPrefix}transmuterProfessionIcon.png";
-            public static string AdeptIcon = $"{assetPrefix}adeptProfessionIcon.png";
-            public static string SageIcon = $"{assetPrefix}sageProfessionIcon.png";
-            public static string AurumancerIcon = $"{assetPrefix}aurumancerProfessionIcon.png";
-            public static string ConduitIcon = $"{assetPrefix}alchemySkillIcon.png";
+            public static string SkillIcon = $"alchemySkillIcon.png";
+            public static string SkillIconBordered = $"alchemySkillIconBordered.png";
+            public static string ShaperIcon = $"shaperProfessionIcon_Hybrid.png";
+            public static string TransmuterIcon = $"transmuterProfessionIcon.png";
+            public static string AdeptIcon = $"adeptProfessionIcon.png";
+            public static string SageIcon = $"sageProfessionIcon.png";
+            public static string AurumancerIcon = $"aurumancerProfessionIcon.png";
+            public static string ConduitIcon = $"conduitProfessionIcon.png";
         }
+
+        public static Texture2D alchemySkillIcon;
+        public static Texture2D alchemySkillIconBordered;
+        public static Texture2D alchemyShaperIcon;
+        public static Texture2D alchemyTransmuterIcon;
+        public static Texture2D alchemyAdeptIcon;
+        public static Texture2D alchemySageIcon;
+        public static Texture2D alchemyAurumancerIcon;
+        public static Texture2D alchemyConduitIcon;
+
+        public static string assetPrefix = "assets\\";
 
         //handle capturing icons/textures for the mod's texture needs.
         private void HandleTextureCaching()
         {
-            //alchemy skill icon
-            try
-            {
-                alchemySkillIcon = instance.eeHelper.Content.Load<Texture2D>(Icons.SkillIcon);
-            }
-            catch (Exception e)
-            {
-                Log.error("Failed to load icon: " + e);
-                alchemySkillIcon = new Texture2D(Game1.graphics.GraphicsDevice, 16, 16);
-                alchemySkillIcon.SetData(Enumerable.Range(0, 16 * 16).Select(i => new Color(225, 168, 255)).ToArray());
-            }
+            alchemySkillIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SkillIcon}");
+            alchemySkillIconBordered = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SkillIconBordered}");
+            alchemyShaperIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.ShaperIcon}");
+            alchemyTransmuterIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.TransmuterIcon}");
+            alchemyAdeptIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AdeptIcon}");
+            alchemySageIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SageIcon}");
+            alchemyAurumancerIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AurumancerIcon}");
+            alchemyConduitIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.ConduitIcon}");
         }
 
-        //ensures that the wizard tower is a leyline for the mod by default.
-        private const string VANILLA_LEYLINE_LOCATION = "WizardHouse";
-        
-        private void InitializeVanillaLeyline()
+        internal static Texture2D GetProfessionTexture(Professions professions)
         {
-            if (Game1.getLocationFromName(VANILLA_LEYLINE_LOCATION) == null)
-                Log.error($"{VANILLA_LEYLINE_LOCATION} is missing, there is a very bad problem and you will not be going to space today.");
-            else
-                Game1.getLocationFromName(VANILLA_LEYLINE_LOCATION)?.map.Properties.Add(Alchemy.LEYLINE_PROPERTY_INDICATOR, 0F);
-            
+            switch (professions)
+            {
+                case Professions.Shaper:
+                    return alchemyShaperIcon;
+                case Professions.Sage:
+                    return alchemySageIcon;
+                case Professions.Transmuter:
+                    return alchemyTransmuterIcon;
+                case Professions.Adept:
+                    return alchemyAdeptIcon;
+                case Professions.Aurumancer:
+                    return alchemyAurumancerIcon;
+                case Professions.Conduit:
+                    return alchemyConduitIcon;
+            }
+            return alchemySkillIconBordered;
+        }
+
+
+        //ensures that the wizard tower and witch hut are leylines for the mod by default.
+        private static string[] VANILLA_LEYLINE_LOCATIONS = new string[]{ "WizardHouse", "WitchHut", "Desert" };
+
+        private void InitializeVanillaLeylines()
+        {
+            foreach (string leyline in VANILLA_LEYLINE_LOCATIONS)
+            {
+                if (Game1.getLocationFromName(leyline) == null)
+                    Log.error($"{leyline} is missing, there is a very bad problem and you will not be going to space today.");
+                else
+                    Game1.getLocationFromName(leyline)?.map.Properties.Add(Alchemy.LEYLINE_PROPERTY_INDICATOR, 0F);
+            }
         }
 
         //fires when loading a save, initializes the item blacklist and loads player save data.
         private void SaveEvents_AfterLoad(object sender, EventArgs e)
         {
             InitializePlayerData();
-            InitializeVanillaLeyline();
+            InitializeVanillaLeylines();
             PopulateItemLibrary();
         }
 

@@ -8,10 +8,11 @@ using StardewValley;
 namespace EquivalentExchange.Overrides
 {
 
-    [HarmonyPatch(typeof(Game1), "showEndOfNightStuff")]
+    [HarmonyPatch(typeof(StardewValley.Game1))]
+    [HarmonyPatch("showEndOfNightStuff")]
     public class ShowOvernightEventHook
     {
-        public static void ShowOvernightEvent()
+        public static void showEndOfNightStuff_mid()
         {
             var ev = new EventArgsOvernightEvent();
             OvernightEvent.InvokeShowNightEndMenus(ev);
@@ -26,7 +27,7 @@ namespace EquivalentExchange.Overrides
             {
                 if (instruction.opcode == OpCodes.Ldstr && (string)instruction.operand == "newRecord")
                 {
-                    newInstructions.Insert(newInstructions.Count - 2, new CodeInstruction(OpCodes.Call, typeof(ShowOvernightEventHook).GetMethod("ShowOvernightEvent")));
+                    newInstructions.Insert(newInstructions.Count - 2, new CodeInstruction(OpCodes.Call, typeof(ShowOvernightEventHook).GetMethod("showEndOfNightStuff_mid")));
                 }
                 newInstructions.Add(instruction);
             }
