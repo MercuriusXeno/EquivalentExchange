@@ -72,6 +72,7 @@
     <Compile Include="Models\ModConfigModel.cs" />
     <Compile Include="Overrides\Game1.cs" />
     <Compile Include="Overrides\LevelUpMenu.cs" />
+    <Compile Include="Professions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Models\SaveDataModel.cs" />
     <Compile Include="Util.cs" />

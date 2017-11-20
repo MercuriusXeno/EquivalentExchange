@@ -84,7 +84,7 @@ namespace EquivalentExchange
                 this.currentLevel,
                 " Alchemy"
             });
-            this.extraInfoForLevel = this.GetExtraInfoForLevel(this.currentLevel, constructorPlayer.luckLevel, Game1.player.professions.Contains((int)EquivalentExchange.Professions.Aurumancer), Game1.player.professions.Contains((int)EquivalentExchange.Professions.Transmuter));
+            this.extraInfoForLevel = this.GetExtraInfoForLevel(this.currentLevel, constructorPlayer.luckLevel, Game1.player.professions.Contains(Professions.Aurumancer), Game1.player.professions.Contains(Professions.Transmuter));
             sourceRectForLevelIcon = new Rectangle(0, 0, 16, 16);
             if (this.currentLevel > 0 && this.currentLevel % 5 == 0)
             {
@@ -92,18 +92,18 @@ namespace EquivalentExchange
                 this.isProfessionChooser = true;
                 if (this.currentLevel == 5)
                 {
-                    this.professionsToChoose.Add((int)EquivalentExchange.Professions.Shaper);
-                    this.professionsToChoose.Add((int)EquivalentExchange.Professions.Sage);
+                    this.professionsToChoose.Add(Professions.Shaper);
+                    this.professionsToChoose.Add(Professions.Sage);
                 }
-                else if (Game1.player.professions.Contains((int)EquivalentExchange.Professions.Shaper))
+                else if (Game1.player.professions.Contains(Professions.Shaper))
                 {
-                    this.professionsToChoose.Add((int)EquivalentExchange.Professions.Transmuter);
-                    this.professionsToChoose.Add((int)EquivalentExchange.Professions.Adept);                    
+                    this.professionsToChoose.Add(Professions.Transmuter);
+                    this.professionsToChoose.Add(Professions.Adept);                    
                 }
                 else
                 {
-                    this.professionsToChoose.Add((int)EquivalentExchange.Professions.Transmuter);
-                    this.professionsToChoose.Add((int)EquivalentExchange.Professions.Adept);
+                    this.professionsToChoose.Add(Professions.Transmuter);
+                    this.professionsToChoose.Add(Professions.Adept);
                 }
                 this.leftProfessionDescription = AlchemyLevelUpMenu.getProfessionDescription(this.professionsToChoose[0]);
                 this.rightProfessionDescription = AlchemyLevelUpMenu.getProfessionDescription(this.professionsToChoose[1]);
@@ -150,24 +150,24 @@ namespace EquivalentExchange
             list.Add(GetProfessionName(whichProfession));
             switch (whichProfession)
             {
-                case (int)EquivalentExchange.Professions.Shaper:                    
+                case Professions.Shaper:                    
                     list.Add("Lucky transmutes affected by daily luck twice as much (1-25% is now 2-50%).");
                     break;
-                case (int)EquivalentExchange.Professions.Sage:                    
+                case Professions.Sage:                    
                     list.Add($"The base stamina cost of transmutes is reduced by a flat { (Alchemy.SAGE_PROFESSION_STAMINA_DRAIN_BONUS * 100D) }%");
                     break;
-                case (int)EquivalentExchange.Professions.Transmuter:
+                case Professions.Transmuter:
                     double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(10, true) - Alchemy.TRANSMUTER_TRANSMUTATION_BONUS) * 100D;                    
                     list.Add($"Transmutation Cost reduced to { nextCoefficientCost.ToString() }%");
                     break;
-                case (int)EquivalentExchange.Professions.Adept:                    
+                case Professions.Adept:                    
                     list.Add($"Proximity to magic increases chance for lucky transmute by up to 15%.");
                     break;
-                case (int)EquivalentExchange.Professions.Aurumancer:
+                case Professions.Aurumancer:
                     double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(10, true) + Alchemy.AURUMANCER_LIQUIDATION_BONUS) * 100D;                    
                     list.Add($"Liquidation Value increased to { nextCoefficientValue.ToString() }%");
                     break;
-                case (int)EquivalentExchange.Professions.Conduit:
+                case Professions.Conduit:
                     list.Add($"Rebounds are now lucky transmutes but you still take damage.");
                     break;
             }
@@ -177,17 +177,17 @@ namespace EquivalentExchange
         {
             switch (whichProfession)
             {
-                case (int)EquivalentExchange.Professions.Shaper:
+                case Professions.Shaper:
                     return "Shaper";
-                case (int)EquivalentExchange.Professions.Sage:
+                case Professions.Sage:
                     return "Sage";
-                case (int)EquivalentExchange.Professions.Transmuter:
+                case Professions.Transmuter:
                     return "Transmuter";
-                case (int)EquivalentExchange.Professions.Adept:
+                case Professions.Adept:
                     return "Adept";
-                case (int)EquivalentExchange.Professions.Aurumancer:
+                case Professions.Aurumancer:
                     return "Aurumancer";
-                case (int)EquivalentExchange.Professions.Conduit:
+                case Professions.Conduit:
                     return "Conduit";
             }
 

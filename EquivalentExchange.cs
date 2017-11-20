@@ -153,25 +153,25 @@ namespace EquivalentExchange
         }
 
         //return first match on professions for levels 5 and 10
-        private List<Professions> GetProfessionsForSkillLevel(int whichLevel)
+        private List<int> GetProfessionsForSkillLevel(int whichLevel)
         {
-            List<Professions> obtainedProfessionsAtLevel = new List<Professions>();
+            List<int> obtainedProfessionsAtLevel = new List<int>();
             switch (whichLevel)
             {
                 case 5:
-                    if (Game1.player.professions.Contains((int)Professions.Sage))
+                    if (Game1.player.professions.Contains(Professions.Sage))
                         obtainedProfessionsAtLevel.Add(Professions.Sage);
-                    if (Game1.player.professions.Contains((int)Professions.Shaper))
+                    if (Game1.player.professions.Contains(Professions.Shaper))
                         obtainedProfessionsAtLevel.Add(Professions.Shaper);
                     break;
                 default:
-                    if (Game1.player.professions.Contains((int)Professions.Transmuter))
+                    if (Game1.player.professions.Contains(Professions.Transmuter))
                         obtainedProfessionsAtLevel.Add(Professions.Transmuter);
-                    if (Game1.player.professions.Contains((int)Professions.Adept))
+                    if (Game1.player.professions.Contains(Professions.Adept))
                         obtainedProfessionsAtLevel.Add(Professions.Adept);
-                    if (Game1.player.professions.Contains((int)Professions.Aurumancer))
+                    if (Game1.player.professions.Contains(Professions.Aurumancer))
                         obtainedProfessionsAtLevel.Add(Professions.Aurumancer);
-                    if (Game1.player.professions.Contains((int)Professions.Conduit))
+                    if (Game1.player.professions.Contains(Professions.Conduit))
                         obtainedProfessionsAtLevel.Add(Professions.Conduit);
                     break;
             }
@@ -207,13 +207,13 @@ namespace EquivalentExchange
             {
                 asset
                     .AsDictionary<string, string>()
-                    .Set("LevelUp_ProfessionName_" + AlchemyLevelUpMenu.GetProfessionName(i), AlchemyLevelUpMenu.GetProfessionName(i));
+                    .Set($"LevelUp_ProfessionName_{AlchemyLevelUpMenu.GetProfessionName(i)}", AlchemyLevelUpMenu.GetProfessionName(i));
             }
             foreach (int i in secondRankProfessions)
             {
                 asset
                     .AsDictionary<string, string>()
-                    .Set("LevelUp_ProfessionName_" + AlchemyLevelUpMenu.GetProfessionName(i), AlchemyLevelUpMenu.GetProfessionName(i));
+                    .Set($"LevelUp_ProfessionName_{AlchemyLevelUpMenu.GetProfessionName(i)}", AlchemyLevelUpMenu.GetProfessionName(i));
             }
         }
 
@@ -1063,9 +1063,9 @@ namespace EquivalentExchange
         }
 
         private static bool hasAllProfessionsMod = false;
-
-        private List<int> firstRankProfessions = new List<int>{ (int)Professions.Shaper, (int)Professions.Sage };
-        private List<int> secondRankProfessions = new List<int>{ (int)Professions.Transmuter, (int)Professions.Adept, (int)Professions.Aurumancer, (int)Professions.Conduit };
+        
+        private List<int> firstRankProfessions = new List<int>{ Professions.Shaper, Professions.Sage };
+        private List<int> secondRankProfessions = new List<int>{ Professions.Transmuter, Professions.Adept, Professions.Aurumancer, Professions.Conduit };
         private void CheckForAllProfessionsMod()
         {
             if (!eeHelper.ModRegistry.IsLoaded("community.AllProfessions"))
@@ -1076,38 +1076,6 @@ namespace EquivalentExchange
 
             Log.info("All Professions mod found. You will get every alchemy profession for your level.");
             hasAllProfessionsMod = true;
-        }
-
-        public enum Professions : int
-        {
-            Default = 0,
-            Shaper = 61,
-            Sage = 62,
-            Transmuter = 63,
-            Adept = 64,
-            Aurumancer = 65,
-            Conduit = 66
-        }
-
-        private Professions GetProfessionFromNumber(int chosenProfessionNumber)
-        {
-            switch (chosenProfessionNumber)
-            {
-                case 61:
-                    return Professions.Shaper;
-                case 62:
-                    return Professions.Sage;
-                case 63:
-                    return Professions.Transmuter;
-                case 64:
-                    return Professions.Adept;
-                case 65:
-                    return Professions.Aurumancer;
-                case 66:
-                    return Professions.Conduit;
-                default:
-                    return Professions.Default;
-            }
         }
     }
 }
