@@ -203,37 +203,5 @@ namespace EquivalentExchange
                 return;
             Game1.player.Stamina -= (float)staminaCost;
         }
-
-        //called when selecting a profession from the level up menu, sets the chosen profession for icon purposes.
-        internal static void EnableAlchemistProfession(int profession)
-        {
-            switch (profession)
-            {
-                case Professions.Shaper:
-                    Game1.player.professions.Add(Professions.Shaper);
-                    //EquivalentExchange.instance.currentPlayerData.ChosenRankFiveProfession = Professions.Shaper;
-                    break;
-                case Professions.Sage:
-                    Game1.player.professions.Add(Professions.Sage);
-                    //EquivalentExchange.instance.currentPlayerData.ChosenRankFiveProfession = Professions.Sage;
-                    break;
-                case Professions.Transmuter:
-                    Game1.player.professions.Add(Professions.Transmuter);
-                    //EquivalentExchange.instance.currentPlayerData.ChosenRankTenProfession = Professions.Transmuter;
-                    break;
-                case Professions.Adept:
-                    Game1.player.professions.Add(Professions.Adept);
-                    //EquivalentExchange.instance.currentPlayerData.ChosenRankTenProfession = Professions.Adept;
-                    break;
-                case Professions.Aurumancer:
-                    Game1.player.professions.Add(Professions.Aurumancer);
-                    //EquivalentExchange.instance.currentPlayerData.ChosenRankTenProfession = Professions.Aurumancer;
-                    break;
-                case Professions.Conduit:
-                    Game1.player.professions.Add(Professions.Conduit);
-                    //EquivalentExchange.instance.currentPlayerData.ChosenRankTenProfession = Professions.Conduit;
-                    break;
-            }
-        }
     }
 }

@@ -12,19 +12,13 @@ using System.Threading.Tasks;
 namespace EquivalentExchange
 {
     // Copy from LevelUpMenu
-    public class AlchemyLevelUpMenu : IClickableMenu
+    public class AlchemyLevelUpMenu : LevelUpMenu
     {
-        public const int basewidth = 768;
-
-        public const int baseheight = 512;
-
-        public bool informationUp;
-
-        public bool isActive;
-
-        public bool isProfessionChooser;
-
         private int currentLevel;
+        public int GetLevel()
+        {
+            return this.currentLevel;
+        }
 
         private int timerBeforeStart;
 
@@ -33,9 +27,7 @@ namespace EquivalentExchange
         private Color rightProfessionColor = Game1.textColor;
 
         private MouseState oldMouseState;
-
-        private ClickableTextureComponent okButton;
-
+        
         private List<CraftingRecipe> newCraftingRecipes = new List<CraftingRecipe>();
 
         private List<string> extraInfoForLevel = new List<string>();
@@ -55,7 +47,7 @@ namespace EquivalentExchange
         private StardewValley.Farmer player = null;
 
         public AlchemyLevelUpMenu()
-            : base(Game1.viewport.Width / 2 - 384, Game1.viewport.Height / 2 - 256, 768, 512, false)
+            : base()
         {
             this.player = null;
             this.width = Game1.tileSize * 12;
@@ -64,7 +56,6 @@ namespace EquivalentExchange
         }
 
         public AlchemyLevelUpMenu(StardewValley.Farmer constructorPlayer,  int level)
-            : base(Game1.viewport.Width / 2 - 384, Game1.viewport.Height / 2 - 256, 768, 512, false)
         {
             this.player = constructorPlayer;
             this.timerBeforeStart = 250;
@@ -141,7 +132,7 @@ namespace EquivalentExchange
             extraInfoList.Add(coefficientValue);
             extraInfoList.Add(luckyTransmuteChance);
             extraInfoList.Add(distanceFromTowerImpact);
-            extraInfoForLevel.Add(staminaCostReduction);
+            extraInfoList.Add(staminaCostReduction);
             return extraInfoList;
         }
 
@@ -157,7 +148,7 @@ namespace EquivalentExchange
                     list.Add($"The base stamina cost of transmutes is reduced by a flat { (Alchemy.SAGE_PROFESSION_STAMINA_DRAIN_BONUS * 100D) }%");
                     break;
                 case Professions.Transmuter:
-                    double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(10, true) - Alchemy.TRANSMUTER_TRANSMUTATION_BONUS) * 100D;                    
+                    double nextCoefficientCost = Alchemy.GetTransmutationMarkupPercentage(10, true) * 100D;                    
                     list.Add($"Transmutation Cost reduced to { nextCoefficientCost.ToString() }%");
                     break;
                 case Professions.Adept:                    
@@ -194,7 +185,7 @@ namespace EquivalentExchange
             return null;
         }
 
-        public static List<string> getProfessionDescription(int whichProfession)
+        new public static List<string> getProfessionDescription(int whichProfession)
         {
             List<string> list = new List<string>();
             AlchemyLevelUpMenu.AddProfessionDescriptions(list, whichProfession);
@@ -209,7 +200,7 @@ namespace EquivalentExchange
         {
         }
 
-        public void getImmediateProfessionPerk(int whichProfession)
+        new public void getImmediateProfessionPerk(int whichProfession)
         {
         }
 
@@ -266,7 +257,7 @@ namespace EquivalentExchange
                         this.leftProfessionColor = Color.Green;
                         if (((Mouse.GetState().LeftButton == ButtonState.Pressed && this.oldMouseState.LeftButton == ButtonState.Released) || (Game1.options.gamepadControls && GamePad.GetState(PlayerIndex.One).IsButtonDown(Buttons.A) && !Game1.oldPadState.IsButtonDown(Buttons.A))) && this.readyToClose())
                         {
-                            Alchemy.EnableAlchemistProfession(this.professionsToChoose[0]);
+                            Professions.EnableAlchemistProfession(this.professionsToChoose[0]);
                             this.isActive = false;
                             this.informationUp = false;
                             this.isProfessionChooser = false;
@@ -277,7 +268,7 @@ namespace EquivalentExchange
                         this.rightProfessionColor = Color.Green;
                         if (((Mouse.GetState().LeftButton == ButtonState.Pressed && this.oldMouseState.LeftButton == ButtonState.Released) || (Game1.options.gamepadControls && GamePad.GetState(PlayerIndex.One).IsButtonDown(Buttons.A) && !Game1.oldPadState.IsButtonDown(Buttons.A))) && this.readyToClose())
                         {
-                            Alchemy.EnableAlchemistProfession(this.professionsToChoose[1]);
+                            Professions.EnableAlchemistProfession(this.professionsToChoose[1]);
                             this.isActive = false;
                             this.informationUp = false;
                             this.isProfessionChooser = false;
@@ -337,19 +328,19 @@ namespace EquivalentExchange
                     Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height, false, true, null, false);
                     base.drawHorizontalPartition(b, this.yPositionOnScreen + Game1.tileSize * 3, false);
                     base.drawVerticalIntersectingPartition(b, this.xPositionOnScreen + this.width / 2 - Game1.tileSize / 2, this.yPositionOnScreen + Game1.tileSize * 3);
-                    Utility.drawWithShadow(b, EquivalentExchange.alchemySkillIconBordered, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + IClickableMenu.borderWidth), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), this.sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom, false, 0.88f, -1, -1, 0.35f);
+                    Utility.drawWithShadow(b, DrawingUtil.alchemySkillIconBordered, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + IClickableMenu.borderWidth), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), this.sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom, false, 0.88f, -1, -1, 0.35f);
                     b.DrawString(Game1.dialogueFont, this.title, new Vector2((float)(this.xPositionOnScreen + this.width / 2) - Game1.dialogueFont.MeasureString(this.title).X / 2f, (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), Game1.textColor);
-                    Utility.drawWithShadow(b, EquivalentExchange.alchemySkillIconBordered, new Vector2((float)(this.xPositionOnScreen + this.width - IClickableMenu.spaceToClearSideBorder - IClickableMenu.borderWidth - Game1.tileSize), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), this.sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom, false, 0.88f, -1, -1, 0.35f);
+                    Utility.drawWithShadow(b, DrawingUtil.alchemySkillIconBordered, new Vector2((float)(this.xPositionOnScreen + this.width - IClickableMenu.spaceToClearSideBorder - IClickableMenu.borderWidth - Game1.tileSize), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), this.sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom, false, 0.88f, -1, -1, 0.35f);
                     b.DrawString(Game1.smallFont, "Choose a profession:", new Vector2((float)(this.xPositionOnScreen + this.width / 2) - Game1.smallFont.MeasureString("Choose a profession:").X / 2f, (float)(this.yPositionOnScreen + Game1.tileSize + IClickableMenu.spaceToClearTopBorder)), Game1.textColor);
                     b.DrawString(Game1.dialogueFont, this.leftProfessionDescription[0], new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + Game1.tileSize / 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2)), this.leftProfessionColor);
-                    Texture2D textureA = EquivalentExchange.GetProfessionTexture(professionsToChoose[0]);
+                    Texture2D textureA = DrawingUtil.GetProfessionTexture(professionsToChoose[0]);
                     b.Draw(textureA, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + this.width / 2 - Game1.tileSize * 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2 - Game1.tileSize / 4)), sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 1f);
                     for (int i = 1; i < this.leftProfessionDescription.Count<string>(); i++)
                     {
                         b.DrawString(Game1.smallFont, Game1.parseText(this.leftProfessionDescription[i], Game1.smallFont, this.width / 2 - 64), new Vector2((float)(-4 + this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + Game1.tileSize / 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize + 8 + Game1.tileSize * (i + 1))), this.leftProfessionColor);
                     }
                     b.DrawString(Game1.dialogueFont, this.rightProfessionDescription[0], new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + this.width / 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2)), this.rightProfessionColor);
-                    Texture2D textureB = EquivalentExchange.GetProfessionTexture(professionsToChoose[1]);
+                    Texture2D textureB = DrawingUtil.GetProfessionTexture(professionsToChoose[1]);
                     b.Draw(textureB, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + this.width - Game1.tileSize * 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2 - Game1.tileSize / 4)), sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 1f);
                     for (int j = 1; j < this.rightProfessionDescription.Count<string>(); j++)
                     {
@@ -359,9 +350,9 @@ namespace EquivalentExchange
                 else
                 {
                     Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height, false, true, null, false);
-                    Utility.drawWithShadow(b, EquivalentExchange.alchemySkillIconBordered, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + IClickableMenu.borderWidth), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), this.sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom, false, 0.88f, -1, -1, 0.35f);
+                    Utility.drawWithShadow(b, DrawingUtil.alchemySkillIconBordered, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + IClickableMenu.borderWidth), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), this.sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom, false, 0.88f, -1, -1, 0.35f);
                     b.DrawString(Game1.dialogueFont, this.title, new Vector2((float)(this.xPositionOnScreen + this.width / 2) - Game1.dialogueFont.MeasureString(this.title).X / 2f, (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), Game1.textColor);
-                    Utility.drawWithShadow(b, EquivalentExchange.alchemySkillIconBordered, new Vector2((float)(this.xPositionOnScreen + this.width - IClickableMenu.spaceToClearSideBorder - IClickableMenu.borderWidth - Game1.tileSize), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), this.sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom, false, 0.88f, -1, -1, 0.35f);
+                    Utility.drawWithShadow(b, DrawingUtil.alchemySkillIconBordered, new Vector2((float)(this.xPositionOnScreen + this.width - IClickableMenu.spaceToClearSideBorder - IClickableMenu.borderWidth - Game1.tileSize), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), this.sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom, false, 0.88f, -1, -1, 0.35f);
                     int num = this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 4;
                     foreach (string current2 in this.extraInfoForLevel)
                     {
@@ -372,6 +363,14 @@ namespace EquivalentExchange
                 }
                 base.drawMouse(b);
             }
+        }
+
+        new static string getProfessionTitleFromNumber(int whichProfession)
+        {
+            string s = Professions.GetProfessionTitleFromNumber(whichProfession);
+            if (s == null)
+                return LevelUpMenu.getProfessionTitleFromNumber(whichProfession);
+            return s;
         }
     }
 }

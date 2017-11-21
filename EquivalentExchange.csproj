@@ -64,6 +64,7 @@
   <ItemGroup>
     <Compile Include="Alchemy.cs" />
     <Compile Include="AlchemyLevelUpMenu.cs" />
+    <Compile Include="AlchemySkillPage.cs" />
     <Compile Include="DrawingUtil.cs" />
     <Compile Include="Events\EventArgsOvernightEvent.cs" />
     <Compile Include="Events\OvernightEvent.cs" />
@@ -71,8 +72,6 @@
     <Compile Include="EquivalentExchange.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="Models\ModConfigModel.cs" />
-    <Compile Include="Overrides\Game1.cs" />
-    <Compile Include="Overrides\LevelUpMenu.cs" />
     <Compile Include="Professions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Models\SaveDataModel.cs" />
@@ -107,12 +106,6 @@
     <Content Include="assets\shaperProfessionIcon_Hybrid.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Harmony\Harmony\Harmony.csproj">
-      <Project>{69aee16a-b6e7-4642-8081-3928b32455df}</Project>
-      <Name>Harmony</Name>
-    </ProjectReference>
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

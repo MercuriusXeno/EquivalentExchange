@@ -1,17 +1,12 @@
 ﻿using System;
-using Harmony;
 using System.Collections.Generic;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using System.Linq;
 using Microsoft.Xna.Framework.Input;
-using xTile.ObjectModel;
 using EquivalentExchange.Models;
-using EquivalentExchange.Events;
 using System.IO;
-using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework;
 using System.Reflection;
 using StardewValley.Menus;
 
@@ -19,7 +14,7 @@ namespace EquivalentExchange
 {
 
     /// <summary>The mod entry point.</summary>
-    public class EquivalentExchange : Mod, IAssetEditor
+    public class EquivalentExchange : Mod
     {
         //instantiate config
         private ConfigurationModel Config;
@@ -44,9 +39,6 @@ namespace EquivalentExchange
             //preserve this entry method's helper class because it's.. helpful.
             instance.eeHelper = helper;
 
-            //make sure the save directory exists, we need that.
-            InitializeSaveDirectory();
-
             //read the config file, poached from horse whistles, get the configured keys and settings
             Config = helper.ReadConfig<ConfigurationModel>();
 
@@ -69,11 +61,11 @@ namespace EquivalentExchange
             SaveEvents.BeforeSave += SaveEvents_BeforeSave;
 
             //set texture files in memory, they're tiny things.
-            HandleTextureCaching();
+            DrawingUtil.HandleTextureCaching();
 
-            //wire up the overnight event that I stole from spacechase0 and it probably won't work because I'm dumb and he's smart.
-            //this is intended to trigger the leveling menu.
-            OvernightEvent.ShowOvernightEventMenu += OvernightEvent_ShowOvernightEventMenu;
+            //trying something completely different from a patched event hook...
+            //gonna try using this to detect the night event heuristically.
+            GameEvents.UpdateTick += GameEvents_UpdateTick;
 
             //check for experience bars mod: if it's here we draw hud elements for the new alchemy skill
             CheckForExperienceBarsMod();
@@ -97,15 +89,24 @@ namespace EquivalentExchange
 
             //check for chase's skills
             checkForLuck();
-            checkForCooking();
+            checkForCooking();  
+        }
 
-            //harmony patch
-            var harmony = HarmonyInstance.Create("MercuriusXeno.EquivalentExchange");
-            harmony.PatchAll(Assembly.GetExecutingAssembly());     
+        private void GameEvents_UpdateTick(object sender, EventArgs e)
+        {
+            if (!Context.IsWorldReady)
+                return;
+            //unsure if this does what I think it does
+            if (Game1.player.isEmoting && Game1.player.CurrentEmote == 24)
+            {
+                //the player has just answered "yes" to sleep? or the player passed out like a chump.
+                if (Game1.currentLocation.lastQuestionKey == null || Game1.currentLocation.lastQuestionKey.Equals("Sleep"))
+                    AddEndOfNightMenus();
+            }
         }
 
         //integration considerations for chase's skills
-        
+
         public static bool hasLuck = false;
         private void checkForLuck()
         {
@@ -143,128 +144,14 @@ namespace EquivalentExchange
 
                     if (!didInitSkills)
                     {
-                        InitAlchemySkill(skills);
+                        DrawingUtil.InitAlchemySkill(skills);
                         didInitSkills = true;
                     }
                     DrawingUtil.DrawAlchemySkill(skills);
                 }
             }
             else didInitSkills = false;
-        }
-
-        //return first match on professions for levels 5 and 10
-        private List<int> GetProfessionsForSkillLevel(int whichLevel)
-        {
-            List<int> obtainedProfessionsAtLevel = new List<int>();
-            switch (whichLevel)
-            {
-                case 5:
-                    if (Game1.player.professions.Contains(Professions.Sage))
-                        obtainedProfessionsAtLevel.Add(Professions.Sage);
-                    if (Game1.player.professions.Contains(Professions.Shaper))
-                        obtainedProfessionsAtLevel.Add(Professions.Shaper);
-                    break;
-                default:
-                    if (Game1.player.professions.Contains(Professions.Transmuter))
-                        obtainedProfessionsAtLevel.Add(Professions.Transmuter);
-                    if (Game1.player.professions.Contains(Professions.Adept))
-                        obtainedProfessionsAtLevel.Add(Professions.Adept);
-                    if (Game1.player.professions.Contains(Professions.Aurumancer))
-                        obtainedProfessionsAtLevel.Add(Professions.Aurumancer);
-                    if (Game1.player.professions.Contains(Professions.Conduit))
-                        obtainedProfessionsAtLevel.Add(Professions.Conduit);
-                    break;
-            }
-            return obtainedProfessionsAtLevel;
-        }
-        
-        private int getProfessionForSkill(int level)
-        {
-            if (level != 5 && level != 10)
-                return -1;
-
-            List<int> list = (level == 5 ? firstRankProfessions : secondRankProfessions);
-            foreach (int prof in list)
-            {
-                if (Game1.player.professions.Contains(prof))
-                    return prof;
-            }
-
-            return -1;
-        }
-        
-
-        public bool CanEdit<T>(IAssetInfo asset)
-        {
-            return asset.AssetNameEquals(@"Strings\UI");
-        }
-
-        public void Edit<T>(IAssetData asset)
-        {
-            //debug, lets me look in the object
-            var data = asset.Data;
-            foreach (int i in firstRankProfessions)
-            {
-                asset
-                    .AsDictionary<string, string>()
-                    .Set($"LevelUp_ProfessionName_{AlchemyLevelUpMenu.GetProfessionName(i)}", AlchemyLevelUpMenu.GetProfessionName(i));
-            }
-            foreach (int i in secondRankProfessions)
-            {
-                asset
-                    .AsDictionary<string, string>()
-                    .Set($"LevelUp_ProfessionName_{AlchemyLevelUpMenu.GetProfessionName(i)}", AlchemyLevelUpMenu.GetProfessionName(i));
-            }
-        }
-
-        private void InitAlchemySkill(SkillsPage skills)
-        {
-            int alchemyLevel = currentPlayerData.AlchemyLevel;
-
-            // Bunch of stuff from the constructor
-            int num2 = 0;
-            int num3 = skills.xPositionOnScreen + IClickableMenu.borderWidth + IClickableMenu.spaceToClearTopBorder + 4 * Game1.tileSize - Game1.pixelZoom;
-            int num4 = skills.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + IClickableMenu.borderWidth - Game1.pixelZoom * 3;
-            for (int i = 4; i < 10; i += 5)
-            {
-                int j = 5;
-                if (hasLuck)
-                    j++;
-                if (hasCooking)
-                    j++;
-
-                string text = "";
-                string text2 = "";
-                bool flag = false;
-                
-                flag = (alchemyLevel > i);
-                
-                //that said, the chosen profession is needed for.. something?
-                int chosenProfessionNumber = getProfessionForSkill(i + 1);
-
-                object[] args = new object[] { text, text2, AlchemyLevelUpMenu.getProfessionDescription(chosenProfessionNumber) };
-                Util.CallInstanceMethod(typeof(SkillsPage), skills, "parseProfessionDescription", args);
-                text = (string)args[0];
-                text2 = (string)args[1];
-
-                if (flag && (i + 1) % 5 == 0)
-                {
-                    var skillBars = (List<ClickableTextureComponent>)Util.GetInstanceField(typeof(SkillsPage), skills, "skillBars");
-                    skillBars.Add(new ClickableTextureComponent(string.Concat(chosenProfessionNumber), new Rectangle(num2 + num3 - Game1.pixelZoom + i * (Game1.tileSize / 2 + Game1.pixelZoom), num4 + j * (Game1.tileSize / 2 + Game1.pixelZoom * 6), 14 * Game1.pixelZoom, 9 * Game1.pixelZoom), null, text, GetProfessionTexture(chosenProfessionNumber), new Rectangle(0, 0, 16, 16), (float)Game1.pixelZoom, true));
-                }
-                num2 += Game1.pixelZoom * 6;
-            }
-            int k = 5;
-            if (hasLuck)
-                k++;
-            if (hasCooking)
-                k++;
-            int num6 = k;
-            string text3 = "";
-            var skillAreas = (List<ClickableTextureComponent>)Util.GetInstanceField(typeof(SkillsPage), skills, "skillAreas");
-            skillAreas.Add(new ClickableTextureComponent(string.Concat(num6), new Rectangle(num3 - Game1.tileSize * 2 - Game1.tileSize * 3 / 4, num4 + k * (Game1.tileSize / 2 + Game1.pixelZoom * 6), Game1.tileSize * 2 + Game1.pixelZoom * 5, 9 * Game1.pixelZoom), string.Concat(num6), text3, null, Rectangle.Empty, 1f, false));
-        }
-
+        }        
 
         //command to give yourself experience for debug purposes primarily
 
@@ -298,30 +185,68 @@ namespace EquivalentExchange
             showLevelUpMenusByRank.Add(alchemyLevel);
         }
 
-        private void OvernightEvent_ShowOvernightEventMenu(object sender, EventArgsOvernightEvent e)
+        //show the level up menus at night when you hit a profession breakpoint.
+        private void AddEndOfNightMenus()
         {
-            ShowEndOfNightLevelMenu();
-        }
+            if (!Context.IsWorldReady)
+                return;
+            //generally wait for the game fade to reach a pretty high number, this is a total hack to delay the menus until approximately the right time.
+            if (Game1.fadeToBlackAlpha < 0.7D)
+                return;
+            bool playerNeedsLevelFiveProfession = currentPlayerData.AlchemyLevel >= 5 && !Game1.player.professions.Contains((int)Professions.Shaper) && !Game1.player.professions.Contains((int)Professions.Sage);
+            bool playerNeedsLevelTenProfession = currentPlayerData.AlchemyLevel >= 10 && !Game1.player.professions.Contains((int)Professions.Transmuter) && !Game1.player.professions.Contains((int)Professions.Adept) && !Game1.player.professions.Contains((int)Professions.Aurumancer) && !Game1.player.professions.Contains((int)Professions.Conduit);            
+            bool playerGainedALevel = showLevelUpMenusByRank.Count() > 0 ;
 
-        private void ShowEndOfNightLevelMenu()
-        {   
-            if (showLevelUpMenusByRank.Count() > 0)
+            //nothing requires our intervention, bypass this method as it is heavy on logic and predecate searches, and we don't want to fire those every #&!$ing tick
+            if (!playerGainedALevel && !playerNeedsLevelFiveProfession && !playerNeedsLevelTenProfession)
+                return;
+
+            //the save menus follow a last in-first out rule. If any levels are going to be added by the routine, this gets handled in vanilla code
+            //but if *only* the alchemy skill has gained a level, there's no game code to handle an auto-save, so we force one.
+            bool needsSave = playerGainedALevel || playerNeedsLevelFiveProfession || playerNeedsLevelTenProfession;
+
+            //this list will hold any existing calls to save the game if one exists. If one doesn't add it.
+            if (needsSave)
+            {
+                //try to figure out if the game would have saved anyway...
+                bool wouldHaveSavedAnyway = (Game1.player.newLevels.Count > 0 || Game1.getFarm().shippingBin.Count > 0);
+                if (!wouldHaveSavedAnyway)
+                {                
+                    List<IClickableMenu> existingSaveGameCalls = Game1.endOfNightMenus.Where(x => x.GetType().Equals(typeof(SaveGameMenu))).ToList();
+                    bool nightMenusAlreadyHasSave = existingSaveGameCalls.Count > 0;
+
+                    if (!nightMenusAlreadyHasSave)
+                        Game1.endOfNightMenus.Push(new SaveGameMenu());
+                }
+            }
+
+            if (playerGainedALevel)
             {
                 for (int i = showLevelUpMenusByRank.Count() - 1; i >= 0; --i)
                 {
                     int level = showLevelUpMenusByRank[i];
-
-                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, level));
+                    //search for existing levelups already injected into the night menu routine.
+                    List<IClickableMenu> existingLevelUps = Game1.endOfNightMenus.Where(x => x.GetType().Equals(typeof(AlchemyLevelUpMenu)) && ((AlchemyLevelUpMenu)x).GetLevel() == level).ToList();
+                    //excuse the plural, this check is testing for *this level* specifically.
+                    if (existingLevelUps.Count == 0)
+                    {
+                        Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, level));
+                    }
                 }
+                //presume we've added all the levels we need, wipe this thing.
                 showLevelUpMenusByRank.Clear();
             }
-            else if (currentPlayerData.AlchemyLevel >= 5 && !Game1.player.professions.Contains((int)Professions.Shaper) && !Game1.player.professions.Contains((int)Professions.Sage))
+            else if (playerNeedsLevelFiveProfession)
             {
-                Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, 5));
+                List<IClickableMenu> existingLevelUps = Game1.endOfNightMenus.Where(x => x.GetType().Equals(typeof(AlchemyLevelUpMenu)) && ((AlchemyLevelUpMenu)x).GetLevel() == 5).ToList();
+                if (existingLevelUps.Count == 0)                    
+                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, 5));
             }
-            else if (currentPlayerData.AlchemyLevel >= 10 && !Game1.player.professions.Contains((int)Professions.Transmuter) && !Game1.player.professions.Contains((int)Professions.Adept) && !Game1.player.professions.Contains((int)Professions.Aurumancer) && !Game1.player.professions.Contains((int)Professions.Conduit))
-            {            
-                Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, 10));
+            else if (playerNeedsLevelTenProfession)
+            {
+                List<IClickableMenu> existingLevelUps = Game1.endOfNightMenus.Where(x => x.GetType().Equals(typeof(AlchemyLevelUpMenu)) && ((AlchemyLevelUpMenu)x).GetLevel() == 10).ToList();
+                if (existingLevelUps.Count == 0)
+                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, 10));
             }
         }
 
@@ -331,7 +256,7 @@ namespace EquivalentExchange
             if (hasAllProfessionsMod)
             {
                 List<int> professions = Game1.player.professions;
-                List<List<int>> list = new List<List<int>> { firstRankProfessions, secondRankProfessions };
+                List<List<int>> list = new List<List<int>> { Professions.firstRankProfessions, Professions.secondRankProfessions };
                 foreach (List<int> current in list)
                 {
                     bool flag = professions.Intersect(current).Any<int>();
@@ -353,109 +278,7 @@ namespace EquivalentExchange
         //hooked for drawing the experience bar on screen when experience bars mod is present.
         private void GraphicsEvents_OnPostRenderHudEvent(object sender, EventArgs e)
         {
-            if (Game1.activeClickableMenu != null)
-                return;
-
-            try
-            {
-                Type t = Type.GetType("ExperienceBars.Mod, ExperienceBars");
-
-                int currentAlchemyLevel = instance.currentPlayerData.AlchemyLevel;
-                int currentAlchemyExperience = instance.currentPlayerData.AlchemyExperience;
-                int x = 10;
-                int y = (int)Util.GetStaticField(t, "expBottom");
-
-                int previousExperienceRequired = 0, nextExperienceRequired = 1;
-                if (currentAlchemyLevel == 0)
-                {
-                    nextExperienceRequired = Alchemy.GetAlchemyExperienceNeededForNextLevel();
-                }
-                else if (currentAlchemyLevel != 10)
-                {
-                    previousExperienceRequired = Alchemy.GetAlchemyExperienceNeededForLevel(currentAlchemyLevel - 1);
-                    nextExperienceRequired = Alchemy.GetAlchemyExperienceNeededForLevel(currentAlchemyLevel);
-                }
-
-                int progressTowardCurrentLevel = currentAlchemyExperience - previousExperienceRequired;
-                int experienceGapForCurrentLevel = nextExperienceRequired - previousExperienceRequired;
-                float progressBarPercentage = (float)progressTowardCurrentLevel / experienceGapForCurrentLevel;
-                if (currentAlchemyLevel == 10)
-                {
-                    progressBarPercentage = -1;
-                }
-
-                object[] args = new object[]
-                {
-                    x, y,
-                    alchemySkillIcon, new Rectangle( 0, 0, 16, 16 ),
-                    currentAlchemyLevel, progressBarPercentage,
-                    new Color( 196, 79, 255 ),
-                };
-                Util.CallStaticMethod(t, "renderSkillBar", args);
-
-                Util.SetStaticField(t, "expBottom", y + 40);
-            }
-            catch (Exception ex)
-            {
-                Log.error("Exception rendering alchemy experience bar: " + ex);
-                GraphicsEvents.OnPostRenderHudEvent -= GraphicsEvents_OnPostRenderHudEvent;
-            }
-        }
-
-        public struct Icons
-        {
-            public static string SkillIcon = $"alchemySkillIcon.png";
-            public static string SkillIconBordered = $"alchemySkillIconBordered.png";
-            public static string ShaperIcon = $"shaperProfessionIcon_Hybrid.png";
-            public static string TransmuterIcon = $"transmuterProfessionIcon.png";
-            public static string AdeptIcon = $"adeptProfessionIcon.png";
-            public static string SageIcon = $"sageProfessionIcon.png";
-            public static string AurumancerIcon = $"aurumancerProfessionIcon.png";
-            public static string ConduitIcon = $"conduitProfessionIcon.png";
-        }
-
-        public static Texture2D alchemySkillIcon;
-        public static Texture2D alchemySkillIconBordered;
-        public static Texture2D alchemyShaperIcon;
-        public static Texture2D alchemyTransmuterIcon;
-        public static Texture2D alchemyAdeptIcon;
-        public static Texture2D alchemySageIcon;
-        public static Texture2D alchemyAurumancerIcon;
-        public static Texture2D alchemyConduitIcon;
-
-        public static string assetPrefix = "assets\\";
-
-        //handle capturing icons/textures for the mod's texture needs.
-        private void HandleTextureCaching()
-        {
-            alchemySkillIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SkillIcon}");
-            alchemySkillIconBordered = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SkillIconBordered}");
-            alchemyShaperIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.ShaperIcon}");
-            alchemyTransmuterIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.TransmuterIcon}");
-            alchemyAdeptIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AdeptIcon}");
-            alchemySageIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SageIcon}");
-            alchemyAurumancerIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AurumancerIcon}");
-            alchemyConduitIcon = instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.ConduitIcon}");
-        }
-
-        internal static Texture2D GetProfessionTexture(int profession)
-        {
-            switch (profession)
-            {
-                case (int)Professions.Shaper:
-                    return alchemyShaperIcon;
-                case (int)Professions.Sage:
-                    return alchemySageIcon;
-                case (int)Professions.Transmuter:
-                    return alchemyTransmuterIcon;
-                case (int)Professions.Adept:
-                    return alchemyAdeptIcon;
-                case (int)Professions.Aurumancer:
-                    return alchemyAurumancerIcon;
-                case (int)Professions.Conduit:
-                    return alchemyConduitIcon;
-            }
-            return alchemySkillIconBordered;
+            DrawingUtil.DoPostRenderHudEvent();
         }
 
 
@@ -480,60 +303,22 @@ namespace EquivalentExchange
             InitializeVanillaLeylines();
             PopulateItemLibrary();
         }
-
-        //convenience path-getter for the save data folder of Equivalent Exchange.
-        public string GetSaveDataPath()
-        {
-            return $"{instance.eeHelper.DirectoryPath}\\saveData\\"; ;
-        }
-
-        //used to generate a new multiplayer ID if the player's existing one is bogus.
-        public long RandomLong()
-        {
-            System.Random rd = new System.Random();
-            long min = long.MinValue;
-            long max = long.MaxValue;
-            ulong uRange = (ulong)(max - min);
-            ulong ulongRand;
-            do
-            {
-                byte[] buf = new byte[8];
-                rd.NextBytes(buf);
-                ulongRand = (ulong)BitConverter.ToInt64(buf, 0);
-            } while (ulongRand > ulong.MaxValue - ((ulong.MaxValue % uRange) + 1) % uRange);
-
-            return (long)(ulongRand % uRange) + min;
-        }
-
-        private const long DEFAULT_MULTIPLAYER_ID = -6666666;
-
+                
         //handles reading current player json file and loading them into memory
         private void InitializePlayerData()
         {
             // save is loaded
             if (Context.IsWorldReady)
             {
-                //this is quite a hack. If the player's uniqueMultiplayerID is a certain negative default, set it. We need to constrain uniqueness somehow.
-                if (Game1.player.uniqueMultiplayerID == -6666666)
-                {
-                    Game1.player.uniqueMultiplayerID = RandomLong();
-                }
-
-                //fetch each player's data, we're using it to populate a list, and using those to build custom player class instances.
-
-                instance.currentPlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>($"{GetSaveDataPath()}{Game1.player.uniqueMultiplayerID.ToString()}.json");                
+                //fetch the alchemy save for this game file.
+                instance.currentPlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{Game1.uniqueIDForThisGame.ToString()}.json"));                
 
                 //we want to generate the save data model, but we don't save it until we're supposed to, to prevent data from saving prematurely (thus generating a new multiplayer ID)
                 if (instance.currentPlayerData == null)
                 {                                        
-                    instance.currentPlayerData = new SaveDataModel(Game1.player.uniqueMultiplayerID);
+                    instance.currentPlayerData = new SaveDataModel(Game1.uniqueIDForThisGame);
                 }
             }
-        }
-
-        private void InitializeSaveDirectory()
-        {
-            Directory.CreateDirectory(GetSaveDataPath());
         }
 
         //handles writing "each" player's json save to the appropriate file.
@@ -544,7 +329,7 @@ namespace EquivalentExchange
 
         private void SavePlayerData()
         {
-            instance.eeHelper.WriteJsonFile<SaveDataModel>($"{ GetSaveDataPath() }{ Game1.player.uniqueMultiplayerID.ToString()}.json", instance.currentPlayerData);
+            instance.eeHelper.WriteJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{ Game1.uniqueIDForThisGame.ToString()}.json"), instance.currentPlayerData);
         }
 
         //used to hold how many seconds to wait before the mod is allowed to play a transmutation sound
@@ -672,7 +457,7 @@ namespace EquivalentExchange
             //debug REMOVE ME
             if (e.KeyPressed == Keys.F5)
                 Alchemy.AddAlchemyExperience(5000);
-
+            
             if (modifyingControlKeys.Contains(e.KeyPressed))
             {
                 SetModifyingControlKeyState(e.KeyPressed, true);
@@ -763,6 +548,9 @@ namespace EquivalentExchange
             //placeholder for determining if the transmute rebounds, so it knows to play a different sound.
             bool didTransmuteFail = false;
 
+            //if the transmute did fail, this preserves the damage so we can apply it in one cycle, otherwise batches look weird af
+            int reboundDamageTaken = 0;
+
             while (attemptedAmount > 0)
             {
                 int amount = Math.Min(attemptedAmount, costMultiplier);
@@ -788,7 +576,7 @@ namespace EquivalentExchange
                 //if we fail this check, transmutation will fail this cycle.
                 //this is our "rebound check"
                 if (Alchemy.DidPlayerFailReboundCheck()) {
-                    Alchemy.TakeDamageFromRebound(actualValue);
+                    reboundDamageTaken += actualValue;
                     didTransmuteFail = true;
                     //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
                     if (!Game1.player.professions.Contains((int)Professions.Conduit))
@@ -822,9 +610,13 @@ namespace EquivalentExchange
             if (didTransmuteOccur && !didTransmuteFail)
                 PlayMoneySound();
 
-            //a rebound occurred, so play the ouchy sound.
+            //a rebound occurred, apply the damage and also play the ouchy sound.
             if (didTransmuteFail)
+            {
+
+                Alchemy.TakeDamageFromRebound(reboundDamageTaken);
                 PlayReboundSound();
+            }
         }
 
         public void HandleTransmuteEvent (Item heldItem, int attemptedAmount, int actualValue, int costMultiplier)
@@ -843,6 +635,9 @@ namespace EquivalentExchange
 
             //placeholder for determining if the transmute rebounds, so it knows to play a different sound.
             bool didTransmuteFail = false;
+
+            //if the transmute did fail, this preserves the damage so we can apply it in one cycle, otherwise batches look weird af
+            int reboundDamageTaken = 0;
 
             //loop for each transmute-cycle attempt
             while (Game1.player.money >= totalCost && attemptedAmount > 0)
@@ -867,7 +662,7 @@ namespace EquivalentExchange
                 //this is our "rebound check"
                 if (Alchemy.DidPlayerFailReboundCheck())
                 {
-                    Alchemy.TakeDamageFromRebound(actualValue);
+                    reboundDamageTaken += actualValue;
                     didTransmuteFail = true;
                     //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
                     if (!Game1.player.professions.Contains((int)Professions.Conduit))
@@ -902,9 +697,13 @@ namespace EquivalentExchange
             if (didTransmuteOccur && !didTransmuteFail)
                 PlayMagickySound();
 
-            //a rebound occurred, so play the ouchy sound.
+            //a rebound occurred, apply the damage and also play the ouchy sound.
             if (didTransmuteFail)
+            {
+
+                Alchemy.TakeDamageFromRebound(reboundDamageTaken);
                 PlayReboundSound();
+            }
         }
 
         //reimplementation of reduceActiveItemByOne, designed for varying stack amounts.
@@ -993,9 +792,6 @@ namespace EquivalentExchange
         }
 
         private static bool hasAllProfessionsMod = false;
-        
-        private List<int> firstRankProfessions = new List<int>{ Professions.Shaper, Professions.Sage };
-        private List<int> secondRankProfessions = new List<int>{ Professions.Transmuter, Professions.Adept, Professions.Aurumancer, Professions.Conduit };
         private void CheckForAllProfessionsMod()
         {
             if (!eeHelper.ModRegistry.IsLoaded("community.AllProfessions"))

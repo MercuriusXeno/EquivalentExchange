@@ -10,13 +10,13 @@ namespace EquivalentExchange
     class OvernightEvent
     {
 
-        public static event EventHandler<EventArgsOvernightEvent> ShowOvernightEventMenu;
+        //public static event EventHandler<EventArgsOvernightEvent> ShowOvernightEventMenu;
 
-        internal static void InvokeShowNightEndMenus(EventArgsOvernightEvent args)
-        {            
-            if (ShowOvernightEventMenu == null)
-                return;
-            Util.InvokeEvent("EquivalentExchangeEvents.ShowOvernightEventMenu", ShowOvernightEventMenu.GetInvocationList(), null, args);
-        }
+        //internal static void InvokeShowNightEndMenus(EventArgsOvernightEvent args)
+        //{            
+        //    if (ShowOvernightEventMenu == null)
+        //        return;
+        //    Util.InvokeEvent("EquivalentExchangeEvents.ShowOvernightEventMenu", ShowOvernightEventMenu.GetInvocationList(), null, args);
+        //}
     }
 }
