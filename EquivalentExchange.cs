@@ -42,9 +42,6 @@ namespace EquivalentExchange
             //read the config file, poached from horse whistles, get the configured keys and settings
             Config = helper.ReadConfig<ConfigurationModel>();
 
-            //set the mod's ability to play sounds
-            canPlaySounds = Config.IsSoundEnabled;
-
             //add handler for the "transmute/copy" button.
             ControlEvents.KeyPressed += ControlEvents_KeyPressed;
 
@@ -53,9 +50,6 @@ namespace EquivalentExchange
 
             //wire up the library scraping function to occur on save-loading to defer recipe scraping until all mods are loaded, optimistically.
             SaveEvents.AfterLoad += SaveEvents_AfterLoad;
-
-            //used to count down the delay until a sound is allowed to be played
-            GameEvents.OneSecondTick += GameEvents_OneSecondTick;
 
             //we need this to save our alchemists['] data
             SaveEvents.BeforeSave += SaveEvents_BeforeSave;
@@ -66,6 +60,9 @@ namespace EquivalentExchange
             //trying something completely different from a patched event hook...
             //gonna try using this to detect the night event heuristically.
             GameEvents.UpdateTick += GameEvents_UpdateTick;
+
+            //wire up the PreRenderHUD event so I can display info bubbles when needed
+            GraphicsEvents.OnPreRenderHudEvent += GraphicsEvents_OnPreRenderHudEvent;
 
             //check for experience bars mod: if it's here we draw hud elements for the new alchemy skill
             CheckForExperienceBarsMod();
@@ -90,19 +87,6 @@ namespace EquivalentExchange
             //check for chase's skills
             checkForLuck();
             checkForCooking();  
-        }
-
-        private void GameEvents_UpdateTick(object sender, EventArgs e)
-        {
-            if (!Context.IsWorldReady)
-                return;
-            //unsure if this does what I think it does
-            if (Game1.player.isEmoting && Game1.player.CurrentEmote == 24)
-            {
-                //the player has just answered "yes" to sleep? or the player passed out like a chump.
-                if (Game1.currentLocation.lastQuestionKey == null || Game1.currentLocation.lastQuestionKey.Equals("Sleep"))
-                    AddEndOfNightMenus();
-            }
         }
 
         //integration considerations for chase's skills
@@ -130,8 +114,7 @@ namespace EquivalentExchange
             
             hasCooking = true;
         }
-
-        private bool didInitSkills = false;
+        
         private void DrawAfterGUI(object sender, EventArgs args)
         {
             if (Game1.activeClickableMenu is GameMenu)
@@ -141,16 +124,10 @@ namespace EquivalentExchange
                 {
                     var tabs = (List<IClickableMenu>)Util.GetInstanceField(typeof(GameMenu), menu, "pages");
                     var skills = (SkillsPage)tabs[GameMenu.skillsTab];
-
-                    if (!didInitSkills)
-                    {
-                        DrawingUtil.InitAlchemySkill(skills);
-                        didInitSkills = true;
-                    }
-                    DrawingUtil.DrawAlchemySkill(skills);
+                    var alchemySkills = new AlchemySkillsPage(skills.xPositionOnScreen, skills.yPositionOnScreen, skills.width, skills.height, 5 + (hasLuck ? 1 : 0) + (hasCooking ? 1 : 0));
+                    alchemySkills.draw(Game1.spriteBatch);
                 }
             }
-            else didInitSkills = false;
         }        
 
         //command to give yourself experience for debug purposes primarily
@@ -185,14 +162,37 @@ namespace EquivalentExchange
             showLevelUpMenusByRank.Add(alchemyLevel);
         }
 
+        private void GameEvents_UpdateTick(object sender, EventArgs e)
+        {            
+            if (!Context.IsWorldReady)
+                return;
+            //unsure if this does what I think it does
+            if (Game1.player.isEmoting && Game1.player.CurrentEmote == 24)
+            {
+                //the player has just answered "yes" to sleep? or the player passed out like a chump.
+                if (Game1.currentLocation.lastQuestionKey == null || Game1.currentLocation.lastQuestionKey.Equals("Sleep"))
+                    AddEndOfNightMenus();
+            }
+
+            if (transmuteKeyHeld)
+            {
+
+            }
+            if (liquidateKeyHeld)
+            {
+
+            }
+        }
+
         //show the level up menus at night when you hit a profession breakpoint.
         private void AddEndOfNightMenus()
         {
             if (!Context.IsWorldReady)
                 return;
-            //generally wait for the game fade to reach a pretty high number, this is a total hack to delay the menus until approximately the right time.
-            if (Game1.fadeToBlackAlpha < 0.7D)
-                return;
+
+            //trick the game into a full black backdrop early, this just keeps the sequence from looking bizarre.
+            Game1.fadeToBlackAlpha = 1F;
+                        
             bool playerNeedsLevelFiveProfession = currentPlayerData.AlchemyLevel >= 5 && !Game1.player.professions.Contains((int)Professions.Shaper) && !Game1.player.professions.Contains((int)Professions.Sage);
             bool playerNeedsLevelTenProfession = currentPlayerData.AlchemyLevel >= 10 && !Game1.player.professions.Contains((int)Professions.Transmuter) && !Game1.player.professions.Contains((int)Professions.Adept) && !Game1.player.professions.Contains((int)Professions.Aurumancer) && !Game1.player.professions.Contains((int)Professions.Conduit);            
             bool playerGainedALevel = showLevelUpMenusByRank.Count() > 0 ;
@@ -200,26 +200,7 @@ namespace EquivalentExchange
             //nothing requires our intervention, bypass this method as it is heavy on logic and predecate searches, and we don't want to fire those every #&!$ing tick
             if (!playerGainedALevel && !playerNeedsLevelFiveProfession && !playerNeedsLevelTenProfession)
                 return;
-
-            //the save menus follow a last in-first out rule. If any levels are going to be added by the routine, this gets handled in vanilla code
-            //but if *only* the alchemy skill has gained a level, there's no game code to handle an auto-save, so we force one.
-            bool needsSave = playerGainedALevel || playerNeedsLevelFiveProfession || playerNeedsLevelTenProfession;
-
-            //this list will hold any existing calls to save the game if one exists. If one doesn't add it.
-            if (needsSave)
-            {
-                //try to figure out if the game would have saved anyway...
-                bool wouldHaveSavedAnyway = (Game1.player.newLevels.Count > 0 || Game1.getFarm().shippingBin.Count > 0);
-                if (!wouldHaveSavedAnyway)
-                {                
-                    List<IClickableMenu> existingSaveGameCalls = Game1.endOfNightMenus.Where(x => x.GetType().Equals(typeof(SaveGameMenu))).ToList();
-                    bool nightMenusAlreadyHasSave = existingSaveGameCalls.Count > 0;
-
-                    if (!nightMenusAlreadyHasSave)
-                        Game1.endOfNightMenus.Push(new SaveGameMenu());
-                }
-            }
-
+            
             if (playerGainedALevel)
             {
                 for (int i = showLevelUpMenusByRank.Count() - 1; i >= 0; --i)
@@ -230,7 +211,7 @@ namespace EquivalentExchange
                     //excuse the plural, this check is testing for *this level* specifically.
                     if (existingLevelUps.Count == 0)
                     {
-                        Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, level));
+                        Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(level));
                     }
                 }
                 //presume we've added all the levels we need, wipe this thing.
@@ -240,13 +221,13 @@ namespace EquivalentExchange
             {
                 List<IClickableMenu> existingLevelUps = Game1.endOfNightMenus.Where(x => x.GetType().Equals(typeof(AlchemyLevelUpMenu)) && ((AlchemyLevelUpMenu)x).GetLevel() == 5).ToList();
                 if (existingLevelUps.Count == 0)                    
-                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, 5));
+                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(5));
             }
             else if (playerNeedsLevelTenProfession)
             {
                 List<IClickableMenu> existingLevelUps = Game1.endOfNightMenus.Where(x => x.GetType().Equals(typeof(AlchemyLevelUpMenu)) && ((AlchemyLevelUpMenu)x).GetLevel() == 10).ToList();
                 if (existingLevelUps.Count == 0)
-                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(Game1.player, 10));
+                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(10));
             }
         }
 
@@ -280,7 +261,6 @@ namespace EquivalentExchange
         {
             DrawingUtil.DoPostRenderHudEvent();
         }
-
 
         //ensures that the wizard tower and witch hut are leylines for the mod by default.
         private static string[] VANILLA_LEYLINE_LOCATIONS = new string[]{ "WizardHouse", "WitchHut", "Desert" };
@@ -332,33 +312,10 @@ namespace EquivalentExchange
             instance.eeHelper.WriteJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{ Game1.uniqueIDForThisGame.ToString()}.json"), instance.currentPlayerData);
         }
 
-        //used to hold how many seconds to wait before the mod is allowed to play a transmutation sound
-        private static int soundDelay = 0;
-
-        //checks to see if sound delay has passed
-        private bool HasPassedSoundDelay()
-        {
-            return soundDelay == 0;            
-        }
-
-        //set the sound delay to whatever it is in configs, defaults to 0 because my wife thinks it's better that way.
-        private void SetSoundDelay()
-        {
-            soundDelay = Config.RepeatSoundDelay;            
-        }
-
         //play sound method wired up to handle configurable sound delay
         private void PlaySound(string sound)
         {
-            //check to see if the sound delay has passed
-            if (HasPassedSoundDelay())
-            {
-                //reset sound delay
-                SetSoundDelay();
-
-                //play dat sound
                 Game1.playSound(sound);
-            }
         }
 
         //a nice magicky sound suggested by spacechase0
@@ -379,120 +336,84 @@ namespace EquivalentExchange
             PlaySound("ow");
         }
 
-        //if the user opts to use the sound replay delay in configs, this counts the seconds until a sound can be played again.
-        private void GameEvents_OneSecondTick(object sender, EventArgs e)
-        {
-            if (soundDelay > 0)
-            {
-                soundDelay--;
-            }
-        }
-
         /// <summary>Update the mod's config.json file from the current <see cref="Config"/>.</summary>
         internal void SaveConfig()
         {
             eeHelper.WriteConfig(Config);
         }
 
-        //control key modifiers [shift and ctrl], I include both for a more robust "is either pressed" mechanic.
-        public static bool leftShiftKeyPressed = false;
-        public static bool rightShiftKeyPressed = false;
-
-        public static bool leftControlKeyPressed = false;
-        public static bool rightControlKeyPressed = false;
-
-        //convenience methods for detecting when either keys are pressed to modify amount desired from liquidation/transmutes.
-        private bool IsShiftKeyPressed ()
+        private static bool allowInfoBubbleToRender = false;
+        private void GraphicsEvents_OnPreRenderHudEvent(object sender, EventArgs e)
         {
-            return leftShiftKeyPressed || rightShiftKeyPressed;
-        }
+            if (!Context.IsWorldReady)
+                return;
 
-        private bool IsControlKeyPressed()
-        {
-            return leftControlKeyPressed || rightControlKeyPressed;
-        }
+            if (Game1.eventUp)
+                return;
 
-        //simple consts/arrays to keep code clean, both shift keys, both control keys.
-        public const Keys leftShiftKey = Keys.LeftShift;
-        public const Keys rightShiftKey = Keys.RightShift;
-        public const Keys leftControlKey = Keys.LeftControl;
-        public const Keys rightControlKey = Keys.RightControl;
+            if (!allowInfoBubbleToRender)
+                return;
 
-        public static Keys[] modifyingControlKeys = { leftShiftKey, rightShiftKey, leftControlKey, rightControlKey };
-
-        //handler for which flag to set when X key is pressed/released
-        private void SetModifyingControlKeyState(Keys keyChanged, bool isPressed)
-        {
-            switch (keyChanged)
-            {
-                case leftShiftKey:
-                    leftShiftKeyPressed = isPressed;
-                    break;
-                case rightShiftKey:
-                    rightShiftKeyPressed = isPressed;
-                    break;
-                case leftControlKey:
-                    leftControlKeyPressed = isPressed;
-                    break;
-                case rightControlKey:
-                    rightControlKeyPressed = isPressed;
-                    break;
-                default:
-                    break;
-            }            
+            int xPos = Game1.viewport.Width / 2 - 200;
+            int yPos = Game1.viewport.Height / 2 - 200;
+            int xSize = 400;
+            int ySize = 400;
+            Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
         }
 
         //handles the release key event for figuring out if control or shift is let go of
         private void ControlEvents_KeyReleased(object sender, EventArgsKeyPressed e)
         {
-            if (modifyingControlKeys.Contains(e.KeyPressed))
+            //pop up a window with information about your success rates, transmute rates, the leyline locale, useful stuff to know about what you're holding.. etc.
+            if (Config.TransmuteInfoKey.Equals(e.KeyPressed.ToString()))
             {
-                SetModifyingControlKeyState(e.KeyPressed, false);
+                allowInfoBubbleToRender = false;
+            }
+
+            //the key for transmuting is pressed, fire once and then initiate the callback routine to auto-fire.
+            if (Config.TransmuteKey.Equals(e.KeyPressed.ToString()))
+            {
+                transmuteKeyHeld = false;
+            }
+
+            //the key pressed is one of the mods keys.. I'm doing this so I don't fire logic for anything unless either of the mod's keys were pressed.            
+            if (Config.LiquidateKey.Equals(e.KeyPressed.ToString()))
+            {
+                liquidateKeyHeld = false;
             }
         }
+
+        //remembers the state of the mod control keys so we can do some fancy stuff.
+        private static bool transmuteKeyHeld = false;
+        private static bool liquidateKeyHeld = false;
 
         //handles the key press event for figuring out if control or shift is held down, or either of the mod's major transmutation actions is being attempted.
         private void ControlEvents_KeyPressed(object sender, EventArgsKeyPressed e)
         {
-            //debug REMOVE ME
-            if (e.KeyPressed == Keys.F5)
-                Alchemy.AddAlchemyExperience(5000);
-            
-            if (modifyingControlKeys.Contains(e.KeyPressed))
+            //pop up a window with information about your success rates, transmute rates, the leyline locale, useful stuff to know about what you're holding.. etc.
+            if (Config.TransmuteInfoKey.Equals(e.KeyPressed.ToString()))
             {
-                SetModifyingControlKeyState(e.KeyPressed, true);
+                allowInfoBubbleToRender = true;
             }
-            
-            //valid keys to trigger any sort of scan on are:
-            string[] transmuteOrLiquidateKeys = { Config.TransmuteKey, Config.LiquidateKey };
 
-            //the key pressed is one of the mods keys.. I'm doing this so I don't fire logic for anything unless either of the mod's keys were pressed.            
-            if (transmuteOrLiquidateKeys.Contains(e.KeyPressed.ToString()))
+            //the key for transmuting is pressed, fire once and then initiate the callback routine to auto-fire.
+            if (Config.TransmuteKey.Equals(e.KeyPressed.ToString()))
             {
+                transmuteKeyHeld = true;
                 HandleEitherTransmuteEvent(e.KeyPressed);
             }
-        }
 
-        //I'm lazy
-        private long GetCurrentPlayerID()
-        {
-            return Game1.player.uniqueMultiplayerID;
+            //the key pressed is one of the mods keys.. I'm doing this so I don't fire logic for anything unless either of the mod's keys were pressed.            
+            if (Config.LiquidateKey.Equals(e.KeyPressed.ToString()))
+            {
+                liquidateKeyHeld = true;
+                HandleEitherTransmuteEvent(e.KeyPressed);
+            }
         }
 
         //sets up the basic structure of either transmute event, since they have some common ground
         private void HandleEitherTransmuteEvent(Keys keyPressed)
         {
-
-            bool bothModifierKeysPressed = IsShiftKeyPressed() && IsControlKeyPressed();
-
-            //ctrl + shift = 16, ctrl = 9, shift = 4, default is 1
-            int amount = (bothModifierKeysPressed ? 16 : (IsControlKeyPressed() ? 9 : (IsShiftKeyPressed() ? 4 : 1)));
-
-            //the stamina cost is only exacted from the player this many times.
-            //the number of chances of a rebound is only rolled this many times.
-            //this incentivizes larger batches [greatly]
-            int costMultiplier = (int)Math.Sqrt(amount);
-
             // save is loaded
             if (Context.IsWorldReady)
             {
@@ -523,25 +444,21 @@ namespace EquivalentExchange
                         //try to transmute [copy] the item
                         if (keyPressed.ToString() == Config.TransmuteKey)
                         {
-                            HandleTransmuteEvent(heldItem, amount, actualValue, costMultiplier);
+                            HandleTransmuteEvent(heldItem, actualValue);
                         }
 
                         //try to liquidate the item [sell for gold]
                         if (keyPressed.ToString() == Config.LiquidateKey)
                         {
-                            HandleLiquidateEvent(heldItem, amount, actualValue, costMultiplier);
+                            HandleLiquidateEvent(heldItem, actualValue);
                         }
                     }
                 }
             }
         }
 
-        public void HandleLiquidateEvent(Item heldItem, int attemptedAmount, int actualValue, int costMultiplier)
+        public void HandleLiquidateEvent(Item heldItem, int actualValue)
         {            
-            //reduce the amount if the player's modifying the count and it is greater than what the stack holds.
-            //for player convenience, the mod won't let you liquidate the last item
-            attemptedAmount = Math.Min(attemptedAmount, heldItem.getStack() - 1);
-
             //placeholder for determining if the transmute occurs, so it knows to play a sound.
             bool didTransmuteOccur = false;
 
@@ -550,39 +467,33 @@ namespace EquivalentExchange
 
             //if the transmute did fail, this preserves the damage so we can apply it in one cycle, otherwise batches look weird af
             int reboundDamageTaken = 0;
+            
+            double staminaCost = Alchemy.GetStaminaCostForTransmutation(actualValue);
 
-            while (attemptedAmount > 0)
+            //if the player lacks the stamina to execute a transmute, abort
+            if (Game1.player.Stamina <= staminaCost)
             {
-                int amount = Math.Min(attemptedAmount, costMultiplier);
+                return;
+            }
 
-                //we decrement the attempted amount before the anything occurs to prevent loop problems.
-                attemptedAmount -= amount;
+            //if we fail this check, it's because a rebound would kill the player.
+            //if the rebound chance is zero, this check will automatically pass.
+            if (!Alchemy.CanSurviveRebound(actualValue))
+            {
+                return;
+            }
 
-                double staminaCost = Alchemy.GetStaminaCostForTransmutation(actualValue);
+            //if we fail this check, transmutation will fail this cycle.
+            //this is our "rebound check"
+            if (Alchemy.DidPlayerFailReboundCheck()) {
+                reboundDamageTaken += actualValue;
+                didTransmuteFail = true;
+            }
 
-                //if the player lacks the stamina to execute a transmute, abort
-                if (Game1.player.Stamina <= staminaCost)
-                {
-                    continue;
-                }
-
-                //if we fail this check, it's because a rebound would kill the player.
-                //if the rebound chance is zero, this check will automatically pass.
-                if (!Alchemy.CanSurviveRebound(actualValue))
-                {
-                    continue;
-                }
-
-                //if we fail this check, transmutation will fail this cycle.
-                //this is our "rebound check"
-                if (Alchemy.DidPlayerFailReboundCheck()) {
-                    reboundDamageTaken += actualValue;
-                    didTransmuteFail = true;
-                    //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
-                    if (!Game1.player.professions.Contains((int)Professions.Conduit))
-                        continue;
-                }
-
+            //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
+            if (Game1.player.professions.Contains((int)Professions.Conduit) || !didTransmuteFail)
+            { 
+                
                 //if we reached this point transmutation will succeed
                 didTransmuteOccur = true;
 
@@ -594,21 +505,23 @@ namespace EquivalentExchange
                 //this occurs at the expense of rounding - liquidation is lossy.
                 int liquidationValue = (int)Math.Floor(Alchemy.GetLiquidationValuePercentage() * actualValue);
 
-                int totalValue = liquidationValue * amount;
+                int totalValue = liquidationValue;
 
                 Game1.player.Money += totalValue;
 
-                ReduceActiveItemByAmount(Game1.player, amount);
+                ReduceActiveItemByAmount(Game1.player, 1);
 
-                //for right now, use the cost multiplier (number of cycles cognate) as the experience gained.
-                int experienceValue = costMultiplier;
+                //the percentage of experience you get is increased by the lossiness of the transmute
+                //as you increase in levels, this amount diminishes to a minimum of 1.
+                double experienceValueCoefficient = 1D - Alchemy.GetLiquidationValuePercentage();
+                int experienceValue = (int)Math.Floor(Math.Sqrt(experienceValueCoefficient * actualValue / 10 + 1));
 
                 Alchemy.AddAlchemyExperience(experienceValue);
-            }
 
-            //a transmute (at least one) happened, play the cash money sound
-            if (didTransmuteOccur && !didTransmuteFail)
-                PlayMoneySound();
+                //a transmute (at least one) happened, play the cash money sound
+                if (didTransmuteOccur && !didTransmuteFail)
+                    PlayMoneySound();
+            }
 
             //a rebound occurred, apply the damage and also play the ouchy sound.
             if (didTransmuteFail)
@@ -619,16 +532,13 @@ namespace EquivalentExchange
             }
         }
 
-        public void HandleTransmuteEvent (Item heldItem, int attemptedAmount, int actualValue, int costMultiplier)
+        public void HandleTransmuteEvent (Item heldItem, int actualValue)
         {
             //cost of a single item, multiplied by the cost multiplier below
             int transmutationCost = (int)Math.Ceiling(Alchemy.GetTransmutationMarkupPercentage() * actualValue);
 
-            //unlike liquidations, amount shouldn't have to change in the loop
-            int amount = costMultiplier;
-
             //nor should totalCost of a single cycle
-            int totalCost = transmutationCost * amount;            
+            int totalCost = transmutationCost;            
 
             //placeholder for determining if the transmute occurs, so it knows to play a sound.
             bool didTransmuteOccur = false;
@@ -640,22 +550,20 @@ namespace EquivalentExchange
             int reboundDamageTaken = 0;
 
             //loop for each transmute-cycle attempt
-            while (Game1.player.money >= totalCost && attemptedAmount > 0)
+            if (Game1.player.money >= totalCost)
             {
-                attemptedAmount -= amount;
-
                 double staminaCost = Alchemy.GetStaminaCostForTransmutation(actualValue);
                 //if the player lacks the stamina to execute a transmute, abort
                 if (Game1.player.Stamina <= staminaCost)
                 {
-                    continue;
+                    return;
                 }
 
                 //if we fail this check, it's because a rebound would kill the player.
                 //if the rebound chance is zero, this check will automatically pass.
                 if (!Alchemy.CanSurviveRebound(actualValue))
                 {
-                    continue;
+                    return;
                 }
 
                 //if we fail this check, transmutation will fail this cycle.
@@ -665,32 +573,31 @@ namespace EquivalentExchange
                     reboundDamageTaken += actualValue;
                     didTransmuteFail = true;
                     //the conduit profession makes it so that the transmutation succeeds anyway, after taking damage.
-                    if (!Game1.player.professions.Contains((int)Professions.Conduit))
-                        continue;
+                    
                 }
-
-                didTransmuteOccur = true;
-
-                //a rebound obviates a lucky transmute, but a profession trait obviates stamina drain when you rebound.
-                if (!didTransmuteFail && !Game1.player.professions.Contains((int)Professions.Conduit))
-                    Alchemy.HandleStaminaDeduction(staminaCost);
-                
-                Game1.player.Money -= totalCost;
-
-                Item spawnedItem = heldItem.getOne();
-
-                //since we have at least 1 already, add amount - 1 to the stack. if amount is 1, we're adding nothing.
-                if (amount > 1)
+                if (Game1.player.professions.Contains((int)Professions.Conduit) || !didTransmuteFail)
                 {
-                    spawnedItem.addToStack(amount - 1);
+                    
+                    didTransmuteOccur = true;
+
+                    //a rebound obviates a lucky transmute, but a profession trait obviates stamina drain when you rebound.
+                    if (!didTransmuteFail && !Game1.player.professions.Contains((int)Professions.Conduit))
+                        Alchemy.HandleStaminaDeduction(staminaCost);
+                
+                    Game1.player.Money -= totalCost;
+
+                    Item spawnedItem = heldItem.getOne();
+
+                    Game1.createItemDebris(spawnedItem, Game1.player.getStandingPosition(), Game1.player.FacingDirection, (GameLocation)null);
+
+                    //the percentage of experience you get is increased by the lossiness of the transmute
+                    //as you increase in levels, this amount diminishes to a minimum of 1.
+                    double experienceValueCoefficient = Alchemy.GetTransmutationMarkupPercentage() - 1D;
+                    int experienceValue = (int)Math.Floor(Math.Sqrt(experienceValueCoefficient * actualValue / 10 + 1));
+
+                    Alchemy.AddAlchemyExperience(experienceValue);
+
                 }
-
-                Game1.createItemDebris(spawnedItem, Game1.player.getStandingPosition(), Game1.player.FacingDirection, (GameLocation)null);
-
-                //for right now, use the cost multiplier (number of cycles cognate) as the experience gained.
-                int experienceValue = costMultiplier;
-
-                Alchemy.AddAlchemyExperience(experienceValue);
             }
 
             //a transmute (at least one) happened, play the magicky sound
@@ -766,11 +673,12 @@ namespace EquivalentExchange
                 //item cost/value is index 1
                 int.TryParse(parsedValues[1], out int itemCost);
 
-                //objects with a cost of 1 or less are blacklisted
+                //objects with a cost of 0 are blacklisted
                 if (itemCost < 1)
                     blackListedItemIDs.Add(itemID);
             }
 
+            //prismatic shard is blacklisted.
             blackListedItemIDs.Add(StardewValley.Object.prismaticShardIndex);
         }
 

@@ -12,13 +12,23 @@ using System.Threading.Tasks;
 namespace EquivalentExchange
 {
     // Copy from LevelUpMenu
-    public class AlchemyLevelUpMenu : LevelUpMenu
+    public class AlchemyLevelUpMenu : IClickableMenu
     {
         private int currentLevel;
         public int GetLevel()
         {
             return this.currentLevel;
         }
+
+        public const int basewidth = 768;
+
+        public const int baseheight = 512;
+
+        public bool informationUp;
+
+        public bool isActive;
+
+        public bool isProfessionChooser;
 
         private int timerBeforeStart;
 
@@ -27,7 +37,11 @@ namespace EquivalentExchange
         private Color rightProfessionColor = Game1.textColor;
 
         private MouseState oldMouseState;
-        
+
+        //private ClickableTextureComponent starIcon;
+
+        private ClickableTextureComponent okButton;
+
         private List<CraftingRecipe> newCraftingRecipes = new List<CraftingRecipe>();
 
         private List<string> extraInfoForLevel = new List<string>();
@@ -43,21 +57,18 @@ namespace EquivalentExchange
         private List<int> professionsToChoose = new List<int>();
 
         private List<TemporaryAnimatedSprite> littleStars = new List<TemporaryAnimatedSprite>();
-
-        private StardewValley.Farmer player = null;
-
+        
         public AlchemyLevelUpMenu()
-            : base()
+            : base(Game1.viewport.Width / 2 - 384, Game1.viewport.Height / 2 - 256, 768, 512, false)
         {
-            this.player = null;
             this.width = Game1.tileSize * 12;
             this.height = Game1.tileSize * 8;
             this.okButton = new ClickableTextureComponent(new Rectangle(this.xPositionOnScreen + this.width + 4, this.yPositionOnScreen + this.height - Game1.tileSize - IClickableMenu.borderWidth, Game1.tileSize, Game1.tileSize), Game1.mouseCursors, Game1.getSourceRectForStandardTileSheet(Game1.mouseCursors, 46, -1, -1), 1f, false);
         }
 
-        public AlchemyLevelUpMenu(StardewValley.Farmer constructorPlayer,  int level)
+        public AlchemyLevelUpMenu(int level)
+            : base(Game1.viewport.Width / 2 - 384, Game1.viewport.Height / 2 - 256, 768, 512, false)
         {
-            this.player = constructorPlayer;
             this.timerBeforeStart = 250;
             this.isActive = true;
             this.width = Game1.tileSize * 12;
@@ -65,7 +76,7 @@ namespace EquivalentExchange
             this.okButton = new ClickableTextureComponent(new Rectangle(this.xPositionOnScreen + this.width + 4, this.yPositionOnScreen + this.height - Game1.tileSize - IClickableMenu.borderWidth, Game1.tileSize, Game1.tileSize), Game1.mouseCursors, Game1.getSourceRectForStandardTileSheet(Game1.mouseCursors, 46, -1, -1), 1f, false);
             this.newCraftingRecipes.Clear();
             this.extraInfoForLevel.Clear();
-            player.completelyStopAnimatingOrDoingAction();
+            Game1.player.completelyStopAnimatingOrDoingAction();
             this.informationUp = true;
             this.isProfessionChooser = false;
             this.currentLevel = level;
@@ -75,7 +86,8 @@ namespace EquivalentExchange
                 this.currentLevel,
                 " Alchemy"
             });
-            this.extraInfoForLevel = this.GetExtraInfoForLevel(this.currentLevel, constructorPlayer.luckLevel, Game1.player.professions.Contains(Professions.Aurumancer), Game1.player.professions.Contains(Professions.Transmuter));
+            
+            this.extraInfoForLevel = this.GetExtraInfoForLevel(this.currentLevel, Game1.player.luckLevel, Game1.player.professions.Contains(Professions.Aurumancer), Game1.player.professions.Contains(Professions.Transmuter));
             sourceRectForLevelIcon = new Rectangle(0, 0, 16, 16);
             if (this.currentLevel > 0 && this.currentLevel % 5 == 0)
             {
@@ -89,19 +101,19 @@ namespace EquivalentExchange
                 else if (Game1.player.professions.Contains(Professions.Shaper))
                 {
                     this.professionsToChoose.Add(Professions.Transmuter);
-                    this.professionsToChoose.Add(Professions.Adept);                    
+                    this.professionsToChoose.Add(Professions.Adept);
                 }
                 else
                 {
-                    this.professionsToChoose.Add(Professions.Transmuter);
-                    this.professionsToChoose.Add(Professions.Adept);
+                    this.professionsToChoose.Add(Professions.Aurumancer);
+                    this.professionsToChoose.Add(Professions.Conduit);
                 }
                 this.leftProfessionDescription = AlchemyLevelUpMenu.getProfessionDescription(this.professionsToChoose[0]);
                 this.rightProfessionDescription = AlchemyLevelUpMenu.getProfessionDescription(this.professionsToChoose[1]);
             }
             int num = 0;
             this.height = num + Game1.tileSize * 4 + this.extraInfoForLevel.Count<string>() * Game1.tileSize * 3 / 4;
-            player.freezePause = 100;
+            Game1.player.freezePause = 100;
             this.gameWindowSizeChanged(Rectangle.Empty, Rectangle.Empty);
         }
 
@@ -119,49 +131,48 @@ namespace EquivalentExchange
         public List<string> GetExtraInfoForLevel(int whichLevel, int luckLevel, bool hasAurumancerProfession, bool hasTransmuterProfession)
         {
             double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(whichLevel, hasTransmuterProfession) - Alchemy.TRANSMUTATION_BONUS_PER_LEVEL) * 100D;
-            string coefficientCost = $"Transmutation Cost: {nextCoefficientCost.ToString()}%";
             double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(whichLevel, hasAurumancerProfession) + Alchemy.LIQUIDATION_BONUS_PER_LEVEL) * 100D;
-            string coefficientValue = $"Liquidation Value: {nextCoefficientValue.ToString()}%";
+            string coefficientCost = $"Cost: {nextCoefficientCost.ToString()}% Value: {nextCoefficientValue.ToString()}%";
             double luckyTransmuteMinimum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + 0.01) * 100);
             double luckyTransmuteMaximum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + Alchemy.LUCK_NORMALIZATION_FOR_FREE_TRANSMUTES) * 100);
-            string luckyTransmuteChance = $"Lucky Transmute Chance: {luckyTransmuteMinimum.ToString()}% to {luckyTransmuteMaximum.ToString()}%";
-            string distanceFromTowerImpact = $"Leyline distance negated by { (whichLevel) }.";
-            string staminaCostReduction = $"Stamina drain reduced by { ((1 - Alchemy.GetAlchemyStaminaCostSkillMultiplier()) * 100).ToString() }";
+            string luckyTransmuteChance = $"Lucky transmutes: {luckyTransmuteMinimum.ToString()}-{luckyTransmuteMaximum.ToString()}% Stamina drain -{ ((1 - Alchemy.GetAlchemyStaminaCostSkillMultiplierForLevel(whichLevel)) * 100).ToString() }%";
+            string distanceFromTowerImpact = $"Leyline distance negated by { (whichLevel) }.";            
             List<string> extraInfoList = new List<string>();
             extraInfoList.Add(coefficientCost);
-            extraInfoList.Add(coefficientValue);
             extraInfoList.Add(luckyTransmuteChance);
             extraInfoList.Add(distanceFromTowerImpact);
-            extraInfoList.Add(staminaCostReduction);
             return extraInfoList;
         }
 
-        public static void AddProfessionDescriptions(List<string> list, int whichProfession)
+        public static string GetProfessionDescription(int whichProfession)
         {
-            list.Add(GetProfessionName(whichProfession));
             switch (whichProfession)
             {
                 case Professions.Shaper:                    
-                    list.Add("Lucky transmutes affected by daily luck twice as much (1-25% is now 2-50%).");
-                    break;
-                case Professions.Sage:                    
-                    list.Add($"The base stamina cost of transmutes is reduced by a flat { (Alchemy.SAGE_PROFESSION_STAMINA_DRAIN_BONUS * 100D) }%");
-                    break;
+                    return "Lucky transmutes affected by daily luck twice as much (1-25% is now 2-50%).";                    
+                case Professions.Sage:
+                    return $"The base stamina cost of transmutes is reduced by a flat { (Alchemy.SAGE_PROFESSION_STAMINA_DRAIN_BONUS * 100D) }%";
                 case Professions.Transmuter:
-                    double nextCoefficientCost = Alchemy.GetTransmutationMarkupPercentage(10, true) * 100D;                    
-                    list.Add($"Transmutation Cost reduced to { nextCoefficientCost.ToString() }%");
-                    break;
-                case Professions.Adept:                    
-                    list.Add($"Proximity to magic increases chance for lucky transmute by up to 15%.");
-                    break;
+                    double nextCoefficientCost = Alchemy.GetTransmutationMarkupPercentage(10, true) * 100D;
+                    return $"Transmutation Cost reduced to { nextCoefficientCost.ToString() }%";                    
+                case Professions.Adept:
+                    return $"Proximity to magic increases chance for lucky transmute by up to 15%.";                    
                 case Professions.Aurumancer:
-                    double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(10, true) + Alchemy.AURUMANCER_LIQUIDATION_BONUS) * 100D;                    
-                    list.Add($"Liquidation Value increased to { nextCoefficientValue.ToString() }%");
-                    break;
+                    double nextCoefficientValue = Alchemy.GetLiquidationValuePercentage(10, true) * 100D;
+                    return $"Liquidation Value increased to { nextCoefficientValue.ToString() }%";                    
                 case Professions.Conduit:
-                    list.Add($"Rebounds are now lucky transmutes but you still take damage.");
-                    break;
+                    return $"Rebounds are now lucky transmutes but you still take damage.";             
             }
+            return "";
+        }
+        
+        public static List<string> getProfessionDescription(int whichProfession)
+        {
+            List<string> descriptions = new List<string>();
+            string professionName = AlchemyLevelUpMenu.GetProfessionName(whichProfession);
+            descriptions.Add(professionName);
+            descriptions.Add(AlchemyLevelUpMenu.GetProfessionDescription(whichProfession));
+            return descriptions;
         }
 
         public static string GetProfessionName(int whichProfession)
@@ -184,14 +195,7 @@ namespace EquivalentExchange
 
             return null;
         }
-
-        new public static List<string> getProfessionDescription(int whichProfession)
-        {
-            List<string> list = new List<string>();
-            AlchemyLevelUpMenu.AddProfessionDescriptions(list, whichProfession);
-            return list;
-        }
-
+        
         public override void receiveRightClick(int x, int y, bool playSound = true)
         {
         }
@@ -200,7 +204,7 @@ namespace EquivalentExchange
         {
         }
 
-        new public void getImmediateProfessionPerk(int whichProfession)
+        public void getImmediateProfessionPerk(int whichProfession)
         {
         }
 
@@ -248,8 +252,8 @@ namespace EquivalentExchange
             {
                 this.leftProfessionColor = Game1.textColor;
                 this.rightProfessionColor = Game1.textColor;
-                player.completelyStopAnimatingOrDoingAction();
-                player.freezePause = 100;
+                Game1.player.completelyStopAnimatingOrDoingAction();
+                Game1.player.freezePause = 100;
                 if (Game1.getMouseY() > this.yPositionOnScreen + Game1.tileSize * 3 && Game1.getMouseY() < this.yPositionOnScreen + this.height)
                 {
                     if (Game1.getMouseX() > this.xPositionOnScreen && Game1.getMouseX() < this.xPositionOnScreen + this.width / 2)
@@ -281,7 +285,7 @@ namespace EquivalentExchange
             
             if (this.isActive && this.informationUp)
             {
-                player.completelyStopAnimatingOrDoingAction();
+                Game1.player.completelyStopAnimatingOrDoingAction();
                 if (this.okButton.containsPoint(Game1.getOldMouseX(), Game1.getOldMouseY()) && !this.isProfessionChooser)
                 {
                     this.okButton.scale = Math.Min(1.1f, this.okButton.scale + 0.05f);
@@ -296,7 +300,7 @@ namespace EquivalentExchange
                 {
                     this.okButton.scale = Math.Max(1f, this.okButton.scale - 0.05f);
                 }
-                player.freezePause = 100;
+                Game1.player.freezePause = 100;
             }
         }
 
@@ -334,17 +338,17 @@ namespace EquivalentExchange
                     b.DrawString(Game1.smallFont, "Choose a profession:", new Vector2((float)(this.xPositionOnScreen + this.width / 2) - Game1.smallFont.MeasureString("Choose a profession:").X / 2f, (float)(this.yPositionOnScreen + Game1.tileSize + IClickableMenu.spaceToClearTopBorder)), Game1.textColor);
                     b.DrawString(Game1.dialogueFont, this.leftProfessionDescription[0], new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + Game1.tileSize / 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2)), this.leftProfessionColor);
                     Texture2D textureA = DrawingUtil.GetProfessionTexture(professionsToChoose[0]);
-                    b.Draw(textureA, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + this.width / 2 - Game1.tileSize * 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2 - Game1.tileSize / 4)), sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 1f);
+                    b.Draw(textureA, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + 24 + this.width / 2 - Game1.tileSize * 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2 - Game1.tileSize / 4)), sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 1f);
                     for (int i = 1; i < this.leftProfessionDescription.Count<string>(); i++)
                     {
-                        b.DrawString(Game1.smallFont, Game1.parseText(this.leftProfessionDescription[i], Game1.smallFont, this.width / 2 - 64), new Vector2((float)(-4 + this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + Game1.tileSize / 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize + 8 + Game1.tileSize * (i + 1))), this.leftProfessionColor);
+                        b.DrawString(Game1.smallFont, Game1.parseText(this.leftProfessionDescription[i], Game1.smallFont, this.width / 2 - 64), new Vector2((float)(-4 + this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + Game1.tileSize / 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize + 12 + Game1.tileSize * (i + 1))), this.leftProfessionColor);
                     }
                     b.DrawString(Game1.dialogueFont, this.rightProfessionDescription[0], new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + this.width / 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2)), this.rightProfessionColor);
                     Texture2D textureB = DrawingUtil.GetProfessionTexture(professionsToChoose[1]);
                     b.Draw(textureB, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + this.width - Game1.tileSize * 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2 - Game1.tileSize / 4)), sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 1f);
                     for (int j = 1; j < this.rightProfessionDescription.Count<string>(); j++)
                     {
-                        b.DrawString(Game1.smallFont, Game1.parseText(this.rightProfessionDescription[j], Game1.smallFont, this.width / 2 - 48), new Vector2((float)(-4 + this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + this.width / 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize + 8 + Game1.tileSize * (j + 1))), this.rightProfessionColor);
+                        b.DrawString(Game1.smallFont, Game1.parseText(this.rightProfessionDescription[j], Game1.smallFont, this.width / 2 - 48), new Vector2((float)(-4 + this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + this.width / 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize + 12 + Game1.tileSize * (j + 1))), this.rightProfessionColor);
                     }
                 }
                 else
@@ -365,12 +369,12 @@ namespace EquivalentExchange
             }
         }
 
-        new static string getProfessionTitleFromNumber(int whichProfession)
+        static string getProfessionTitleFromNumber(int whichProfession)
         {
             string s = Professions.GetProfessionTitleFromNumber(whichProfession);
             if (s == null)
-                return LevelUpMenu.getProfessionTitleFromNumber(whichProfession);
+                return AlchemyLevelUpMenu.getProfessionTitleFromNumber(whichProfession);
             return s;
-        }
+        }        
     }
 }

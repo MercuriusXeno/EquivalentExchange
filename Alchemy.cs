@@ -31,8 +31,8 @@ namespace EquivalentExchange
         public const double MAP_DISTANCE_FACTOR = 0.05D;
         public const string LEYLINE_PROPERTY_INDICATOR = "AlchemyLeyline";
 
-        //default experience progression values that I'm gonna try to balance around, somehow.
-        public static readonly int[] alchemyExperienceNeededPerLevel = new int[] { 100, 380, 770, 1300, 2150, 3300, 4800, 6900, 10000, 15000 };
+        //default experience progression values, only multiplied by 10... that I'm gonna try to balance around, somehow.
+        public static readonly int[] alchemyExperienceNeededPerLevel = new int[] { 1000, 3800, 7700, 13000, 21500, 33000, 48000, 69000, 100000, 150000 };
 
         //needed for rebound rolls
         public static Random alchemyRandom = new Random();
@@ -65,10 +65,17 @@ namespace EquivalentExchange
         }
 
         //get the coefficient for stamina drain
+        public static double GetAlchemyStaminaCostSkillMultiplierForLevel(int level)
+        {
+            //base of 1 - 0.075 per skill level - profession modifiers
+            return (1 - (level * SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL)) - (Game1.player.professions.Contains(Professions.Sage) ? SAGE_PROFESSION_STAMINA_DRAIN_BONUS : 0.0F);
+        }
+
+        //get the coefficient for stamina drain
         public static double GetAlchemyStaminaCostSkillMultiplier()
         {
             //base of 1 - 0.075 per skill level - profession modifiers
-            return 1 - (EquivalentExchange.instance.currentPlayerData.AlchemyLevel * SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL) - (Game1.player.professions.Contains(Professions.Sage) ? SAGE_PROFESSION_STAMINA_DRAIN_BONUS : 0.0F);
+            return GetAlchemyStaminaCostSkillMultiplierForLevel(EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
         }
 
         //algorithm to return stamina cost for the act of transmuting/liquidating an item, based on player skill and item value
@@ -132,7 +139,6 @@ namespace EquivalentExchange
         {             
             return alchemyRandom.NextDouble() <= GetReboundChance();
         }
-
 
         //get rebound damage based on item value. there is no resistance to this damage.
         public static int GetReboundDamage(int itemValue)
