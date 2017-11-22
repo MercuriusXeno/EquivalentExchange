@@ -61,7 +61,7 @@ namespace EquivalentExchange
             public static string SkillIcon = $"alchemySkillIconDeeper.png";
             public static string SkillIconBordered = $"alchemySkillIconBorderedNewColorExtended.png";
             public static string ShaperIcon = $"shaperProfessionIcon_Hybrid.png";
-            public static string TransmuterIcon = $"transmuterProfessionIcon.png";
+            public static string TransmuterIcon = $"transmuterProfessionIconV2.png";
             public static string AdeptIcon = $"adeptProfessionIcon.png";
             public static string SageIcon = $"sageProfessionIcon.png";
             public static string AurumancerIcon = $"aurumancerProfessionIcon.png";
