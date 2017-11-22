@@ -87,7 +87,7 @@ namespace EquivalentExchange
                 " Alchemy"
             });
             
-            this.extraInfoForLevel = this.GetExtraInfoForLevel(this.currentLevel, Game1.player.luckLevel, Game1.player.professions.Contains(Professions.Aurumancer), Game1.player.professions.Contains(Professions.Transmuter));
+            this.extraInfoForLevel = this.GetExtraInfoForLevel(this.currentLevel, Game1.player.luckLevel);
             sourceRectForLevelIcon = new Rectangle(0, 0, 16, 16);
             if (this.currentLevel > 0 && this.currentLevel % 5 == 0)
             {
@@ -128,10 +128,10 @@ namespace EquivalentExchange
         {
         }
 
-        public List<string> GetExtraInfoForLevel(int whichLevel, int luckLevel, bool hasAurumancerProfession, bool hasTransmuterProfession)
+        public List<string> GetExtraInfoForLevel(int whichLevel, int luckLevel)
         {
-            double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(whichLevel, hasTransmuterProfession) - Alchemy.TRANSMUTATION_BONUS_PER_LEVEL) * 100D;
-            double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(whichLevel, hasAurumancerProfession) + Alchemy.LIQUIDATION_BONUS_PER_LEVEL) * 100D;
+            double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(whichLevel) - Alchemy.TRANSMUTATION_BONUS_PER_LEVEL) * 100D;
+            double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(whichLevel) + Alchemy.LIQUIDATION_BONUS_PER_LEVEL) * 100D;
             string coefficientCost = $"Cost: {nextCoefficientCost.ToString()}% Value: {nextCoefficientValue.ToString()}%";
             double luckyTransmuteMinimum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + 0.01) * 100);
             double luckyTransmuteMaximum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + Alchemy.LUCK_NORMALIZATION_FOR_FREE_TRANSMUTES) * 100);
@@ -151,17 +151,17 @@ namespace EquivalentExchange
                 case Professions.Shaper:                    
                     return "Lucky transmutes affected by daily luck twice as much (1-25% is now 2-50%).";                    
                 case Professions.Sage:
-                    return $"The base stamina cost of transmutes is reduced by a flat { (Alchemy.SAGE_PROFESSION_STAMINA_DRAIN_BONUS * 100D) }%";
+                    return $"When you rebound, you still take damage but you succeed anyway.";
                 case Professions.Transmuter:
-                    double nextCoefficientCost = Alchemy.GetTransmutationMarkupPercentage(10, true) * 100D;
-                    return $"Transmutation Cost reduced to { nextCoefficientCost.ToString() }%";                    
+                    double nextCoefficientCost = Alchemy.GetTransmutationMarkupPercentage(10) * 100D;
+                    return $"Transmutation (item creation only) is twice as lucky.";                    
                 case Professions.Adept:
-                    return $"Proximity to magic increases chance for lucky transmute by up to 15%.";                    
+                    return $"Leyline proximity increases your lucky rate up to 15%.";                    
                 case Professions.Aurumancer:
-                    double nextCoefficientValue = Alchemy.GetLiquidationValuePercentage(10, true) * 100D;
-                    return $"Liquidation Value increased to { nextCoefficientValue.ToString() }%";                    
+                    double nextCoefficientValue = Alchemy.GetLiquidationValuePercentage(10) * 100D;
+                    return $"Liquidation of items worth less than 1% of your current money can't rebound.";                    
                 case Professions.Conduit:
-                    return $"Rebounds are now lucky transmutes but you still take damage.";             
+                    return $"Transmutation or liquidation worth less than 1% of your money doesn't cost stamina.";             
             }
             return "";
         }

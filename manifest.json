@@ -1,9 +1,15 @@
 ﻿{
    "Name": "EquivalentExchange",
    "Author": "MercuriusXeno",
-   "Version": "1.0",
+   "Version": {
+	   "MajorVersion": 1,
+	   "MinorVersion": 0,
+	   "PatchVersion": 1,
+	   "Build": null
+   },
+   "MinimumApiVersion": "2.0",
    "Description": "Transmute things into other things.",
    "UniqueID": "MercuriusXeno.EquivalentExchange",
    "EntryDll": "EquivalentExchange.dll",
-   "UpdateKeys": []
+   "UpdateKeys": [ "Nexus:1656" ]
 }
