@@ -9,6 +9,8 @@ using EquivalentExchange.Models;
 using System.IO;
 using System.Reflection;
 using StardewValley.Menus;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 
 namespace EquivalentExchange
 {
@@ -57,9 +59,15 @@ namespace EquivalentExchange
             //set texture files in memory, they're tiny things.
             DrawingUtil.HandleTextureCaching();
 
+            //set the player's alkahestry energy each new day
+            TimeEvents.AfterDayStarted += TimeEvents_AfterDayStarted;
+
             //trying something completely different from a patched event hook...
             //gonna try using this to detect the night event heuristically.
             GameEvents.UpdateTick += GameEvents_UpdateTick;
+
+            //slower, handles regen
+            GameEvents.OneSecondTick += GameEvents_OneSecondTick;
 
             //wire up the PreRenderHUD event so I can display info bubbles when needed
             GraphicsEvents.OnPreRenderHudEvent += GraphicsEvents_OnPreRenderHudEvent;
@@ -87,6 +95,26 @@ namespace EquivalentExchange
             //check for chase's skills
             checkForLuck();
             checkForCooking();
+        }
+
+        private static void GameEvents_OneSecondTick(object sender, EventArgs e)
+        {
+            if (!Context.IsWorldReady)
+                return;
+
+            RegenAlchemyBarBasedOnLeylineDistance();            
+        }
+
+        private static void RegenAlchemyBarBasedOnLeylineDistance()
+        {
+            double leylineDistance = Math.Min(10D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation));
+            double regenAlchemyBar = (10D - Math.Max(0, leylineDistance - instance.currentPlayerData.AlchemyLevel)) / 20D;
+            instance.currentPlayerData.AlkahestryCurrentEnergy = (float)Math.Min(Alchemy.GetCurrentAlkahestryEnergy() + Math.Max(0.05D, regenAlchemyBar), Alchemy.GetMaxAlkahestryEnergy());
+        }
+
+        private void TimeEvents_AfterDayStarted(object sender, EventArgs e)
+        {
+            Alchemy.RestoreAlkahestryEnergyForNewDay();
         }
 
         //integration considerations for chase's skills
@@ -163,7 +191,7 @@ namespace EquivalentExchange
         }
 
         //internal default value for the repeat rate starting point of the auto-fire functionality of transmute/liquidate when the buttons are held.
-        private const int AUTO_REPEAT_UPDATE_RATE_REFRESH = 50;
+        private const int AUTO_REPEAT_UPDATE_RATE_REFRESH = 20;
 
         int heldCounter = 1;
         int updateTickCount = AUTO_REPEAT_UPDATE_RATE_REFRESH;
@@ -171,6 +199,7 @@ namespace EquivalentExchange
         {
             if (!Context.IsWorldReady)
                 return;
+
             //unsure if this does what I think it does
             if (Game1.player.isEmoting && Game1.player.CurrentEmote == 24)
             {
@@ -188,6 +217,7 @@ namespace EquivalentExchange
                     updateTickCount = (int)Math.Floor(Math.Max(1, updateTickCount * 0.9F));
                 }
             }
+
             if (liquidateKeyHeld)
             {
                 heldCounter++;
@@ -340,36 +370,33 @@ namespace EquivalentExchange
                 return;
 
             if (Game1.eventUp)
-                return;
-
-            if (!allowInfoBubbleToRender)
-                return;
+                return;            
 
             //per the advice of Ento, abort if the player is in an event
             if (Game1.CurrentEvent != null)
                 return;
 
+            RenderInformationOverlayToHUD();
+
+            RenderAlchemyBarToHUD();         
+        }
+
+        public static void RenderInformationOverlayToHUD()
+        {
             //something may have gone wrong if this is null, maybe there's no save data?
-            if (Game1.player != null)
+            if (Game1.player != null && allowInfoBubbleToRender)
             {
                 //get the player's current item
                 Item heldItem = Game1.player.CurrentItem;
 
-                //player is holding item
-                if (heldItem != null)
+                //player is holding item which is valid and can be dropped
+                if (heldItem != null && !blackListedItemIDs.Contains(heldItem.parentSheetIndex) && heldItem.canBeDropped())
                 {
                     //get the item's ID
                     int heldItemID = heldItem.parentSheetIndex;
 
-                    //abort any transmutation event for blacklisted items or items that for whatever reason can't exist in world.
-                    if (blackListedItemIDs.Contains(heldItemID) || !heldItem.canBeDropped())
-                    {
-                        return;
-                    }
-
                     //get the transmutation value, it's based on what it's worth to the player, including profession bonuses. This affects both cost and value.
                     int actualValue = ((StardewValley.Object)heldItem).sellToStorePrice();
-                    int transmuteCost = (int)Math.Ceiling(Alchemy.GetTransmutationMarkupPercentage() * actualValue);
                     int liquidateValue = (int)Math.Floor(Alchemy.GetLiquidationValuePercentage() * actualValue);
                     float staminaDrain = (float)Math.Round(Alchemy.GetStaminaCostForTransmutation(actualValue), 2);
                     float luckyChance = (float)Math.Round(Alchemy.GetLuckyTransmuteChance() * 100, 2);
@@ -379,29 +406,101 @@ namespace EquivalentExchange
                     int xPos = -15;
                     int yPos = 0;// Game1.viewport.Height / 2 - 200;
                     int xSize = 240;
-                    int ySize = 320;
+                    int ySize = 290 - (reboundChance > 0 ? 0 : 30);
                     int dialogPositionMarkerX = xPos + 40;
                     int dialogPositionMarkerY = yPos + 100;
-                    string cost = $"Make -{transmuteCost.ToString()}g";
-                    string value = $"Melt +{liquidateValue.ToString()}g";
-                    string luck = $"Luck {luckyChance.ToString()}%";
-                    string stam = $"Stam -{staminaDrain.ToString()}";
-                    string rebound = $"Fail {reboundChance.ToString()}%";
-                    string damage = $"HP -{reboundDamage.ToString()}";
                     int rowSpacing = 30;
+
                     Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
+
+                    //value
+                    string cost = $"Value {liquidateValue.ToString()}g";
                     Game1.spriteBatch.DrawString(Game1.smallFont, cost, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
                     dialogPositionMarkerY += rowSpacing;
-                    Game1.spriteBatch.DrawString(Game1.smallFont, value, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                    dialogPositionMarkerY += rowSpacing;
+
+                    //luck
+                    string luck = $"Luck {luckyChance.ToString()}%";
                     Game1.spriteBatch.DrawString(Game1.smallFont, luck, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
                     dialogPositionMarkerY += rowSpacing;
+
+                    //Stam
+                    string stam = $"Energy -{staminaDrain.ToString()}";
                     Game1.spriteBatch.DrawString(Game1.smallFont, stam, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
                     dialogPositionMarkerY += rowSpacing;
-                    Game1.spriteBatch.DrawString(Game1.smallFont, rebound, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                    dialogPositionMarkerY += rowSpacing;
-                    Game1.spriteBatch.DrawString(Game1.smallFont, damage, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                    dialogPositionMarkerY += rowSpacing;
+
+                    //rebound info shows up if there's a chance to rebound
+                    if (reboundChance > 0)
+                    {
+                        string rebound = $"Fail {reboundChance.ToString()}%";
+                        string damage = $"HP -{reboundDamage.ToString()}";
+                        Game1.spriteBatch.DrawString(Game1.smallFont, rebound, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
+                        dialogPositionMarkerY += rowSpacing;
+                        Game1.spriteBatch.DrawString(Game1.smallFont, damage, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
+                        dialogPositionMarkerY += rowSpacing;
+                    }
+                } else if (heldItem is StardewValley.Tools.Axe || heldItem is StardewValley.Tools.Pickaxe)
+                {
+                    int xPos = -15;
+                    int yPos = 0;// Game1.viewport.Height / 2 - 200;
+                    int xSize = 330;
+                    int ySize = 260;
+                    int dialogPositionMarkerX = xPos + 40;
+                    int dialogPositionMarkerY = yPos + 100;
+                    int rowSpacing = 30;
+
+                    Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
+
+
+                    int level = (EquivalentExchange.instance.currentPlayerData.AlchemyLevel + 1);
+                    List<string> toolTransmuteDescription = new List<string>();
+                    toolTransmuteDescription.Add("Mouse over a weed");
+                    toolTransmuteDescription.Add($"{(heldItem is StardewValley.Tools.Axe ? "or stick" : "or stone")} and press");
+                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} to break it.");
+                    toolTransmuteDescription.Add($"Breaks a {level}x{level} area.");
+
+                    foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
+                    {
+                        Game1.spriteBatch.DrawString(Game1.smallFont, toolTransmuteDescriptionLine, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
+                        dialogPositionMarkerY += rowSpacing;
+                    }
+                }
+            }
+        }
+
+        public static void RenderAlchemyBarToHUD()
+        {
+            int scale = 4;
+            int alchemyBarWidth = DrawingUtil.alchemyBarSprite.Width * scale;
+            int alchemyBarHeight = DrawingUtil.alchemyBarSprite.Height * scale;
+            int alchemyBarPositionX = Game1.viewport.Width - alchemyBarWidth - 120;
+            int alchemyBarPositionY = Game1.viewport.Height - alchemyBarHeight - 16;
+            Vector2 alchemyBarPosition = new Vector2(alchemyBarPositionX, alchemyBarPositionY);
+            Game1.spriteBatch.Draw(DrawingUtil.alchemyBarSprite, alchemyBarPosition, new Rectangle(0, 0, DrawingUtil.alchemyBarSprite.Width, DrawingUtil.alchemyBarSprite.Height), Color.White, 0, new Vector2(), scale, SpriteEffects.None, 1);
+            if (Alchemy.GetCurrentAlkahestryEnergy() > 0)
+            {
+                Rectangle targetArea = new Rectangle(3, 13, 6, 41);
+                float perc = Alchemy.GetCurrentAlkahestryEnergy() / (float)Alchemy.GetMaxAlkahestryEnergy();
+                int h = (int)(targetArea.Height * perc);
+                targetArea.Y += targetArea.Height - h;
+                targetArea.Height = h;
+
+                targetArea.X *= 4;
+                targetArea.Y *= 4;
+                targetArea.Width *= 4;
+                targetArea.Height *= 4;
+                targetArea.X += (int)alchemyBarPosition.X;
+                targetArea.Y += (int)alchemyBarPosition.Y;
+                Game1.spriteBatch.Draw(DrawingUtil.alchemyBarFillSprite, targetArea, new Rectangle(0, 0, 1, 1), Color.White);
+
+                int alchemyBarMaxX = alchemyBarPositionX + alchemyBarWidth;
+                int alchemyBarMaxY = alchemyBarPositionY + alchemyBarHeight;
+                //perform hover over manually
+                if (Game1.getMouseX() >= alchemyBarPositionX && Game1.getMouseX() <= alchemyBarMaxX && Game1.getMouseY() >= alchemyBarPositionY && Game1.getMouseY() <= alchemyBarMaxY)
+                {
+                    string alkahestryEnergyString = $"{ ((int)Math.Floor(Alchemy.GetCurrentAlkahestryEnergy())).ToString()}/{ Alchemy.GetMaxAlkahestryEnergy().ToString()}";
+                    float stringWidth = Game1.dialogueFont.MeasureString(alkahestryEnergyString).X;
+                    Vector2 alkahestryEnergyStringPosition = new Vector2(alchemyBarPosition.X - stringWidth - 32, alchemyBarPosition.Y + 64);
+                    Game1.spriteBatch.DrawString(Game1.dialogueFont, alkahestryEnergyString, alkahestryEnergyStringPosition, Color.White);
                 }
             }
         }
@@ -496,6 +595,17 @@ namespace EquivalentExchange
                         //get the item's ID
                         int heldItemID = heldItem.parentSheetIndex;
 
+                        //alchemy energy can be used to execute a complex tool action if a tool is in hand.
+                        if (heldItem is StardewValley.Tool && keyPressed.ToString() == instance.Config.TransmuteKey)
+                        {
+                            Tool itemTool = heldItem as Tool;
+                            bool canDoToolAlchemy = itemTool is StardewValley.Tools.Axe || itemTool is StardewValley.Tools.Pickaxe;
+                            if (canDoToolAlchemy)
+                            {
+                                Alchemy.HandleToolTransmute(itemTool);
+                            }
+                        }
+
                         //abort any transmutation event for blacklisted items or items that for whatever reason can't exist in world.
                         if (blackListedItemIDs.Contains(heldItemID) || !heldItem.canBeDropped())
                         {
@@ -562,30 +672,38 @@ namespace EquivalentExchange
 
         public void PopulateItemLibrary()
         {
-            //the point of this routine is to find all of the objects that are created from a recipe. This mod will only transmute raw materials
-            //so anything that is cooked and crafted should not be possible to transmute. This is sort of for balance reasons? It's OP anyway.
+            //you can turn this off to cheat a bit
+            //if (Config.DisableRecipeItems)
+            //{
+            //    //the point of this routine is to find all of the objects that are created from a recipe. This mod will only transmute raw materials
+            //    //so anything that is cooked and crafted should not be possible to transmute. This is sort of for balance reasons? It's OP anyway.
 
-            //Now we're iterating over these two lists to obtain a list of IDs which are invalid for transmutation
-            Dictionary<string, string>[] recipeDictionaries = { CraftingRecipe.craftingRecipes, CraftingRecipe.cookingRecipes };
-            foreach (Dictionary<string, string> recipeDictionary in recipeDictionaries)
-            {
-                foreach (KeyValuePair<string, string> recipe in recipeDictionary)
-                {
-                    //values are tokenized by a / and then subtokenized by spaces
-                    string[] recipeValues = recipe.Value.Split('/');
+            //    //Now we're iterating over these two lists to obtain a list of IDs which are invalid for transmutation
+            //    Dictionary<string, string>[] recipeDictionaries = { CraftingRecipe.craftingRecipes, CraftingRecipe.cookingRecipes };
+            //    foreach (Dictionary<string, string> recipeDictionary in recipeDictionaries)
+            //    {
+            //        foreach (KeyValuePair<string, string> recipe in recipeDictionary)
+            //        {
+            //            //values are tokenized by a / and then subtokenized by spaces
+            //            string[] recipeValues = recipe.Value.Split('/');
 
-                    //index 2 of this array is the output ID and amount, tokenized by spaces. Not all outputs have an amount, it defaults to 1.
-                    //we don't care about quantity anyway.
-                    string[] recipeOutputs = recipeValues[2].Split(' ');
+            //            //index 2 of this array is the output ID and amount, tokenized by spaces. Not all outputs have an amount, it defaults to 1.
+            //            //we don't care about quantity anyway.
+            //            string[] recipeOutputs = recipeValues[2].Split(' ');
 
-                    //index 0 of this array is, thus, the output ID.
-                    int.TryParse(recipeOutputs[0], out int recipeItemID);
+            //            //index 0 of this array is, thus, the output ID.
+            //            int.TryParse(recipeOutputs[0], out int recipeItemID);
 
-                    //add the recipe item ID to the list of items the player can't transmute
-                    blackListedItemIDs.Add(recipeItemID);
-                }
+            //            Item recipeItem = new StardewValley.Object(recipeItemID, 1, true);
 
-            }
+            //            Log.debug("Blacklisted " + recipeItem.DisplayName + " due to recipe");
+
+            //            //add the recipe item ID to the list of items the player can't transmute
+            //            blackListedItemIDs.Add(recipeItemID);
+            //        }
+            //    }
+
+            //}
 
             //iterate over game objects
             foreach (KeyValuePair<int, string> entry in Game1.objectInformation)
@@ -595,18 +713,14 @@ namespace EquivalentExchange
                 //id
                 int itemID = entry.Key;
 
-                //literally everything else
-                string itemValue = entry.Value;
-
-                //split 'everything' into an array
-                string[] parsedValues = itemValue.Split('/');
-
-                //item cost/value is index 1
-                int.TryParse(parsedValues[1], out int itemCost);
+                //StardewValley.Object itemObject = itemItem as StardewValley.Object;
+                var itemObject = new StardewValley.Object(itemID, 1, false, -1, 0);
 
                 //objects with a cost of 0 are blacklisted
-                if (itemCost < 1)
+                if (itemObject.sellToStorePrice() < 1)
+                {
                     blackListedItemIDs.Add(itemID);
+                }
             }
 
             //prismatic shard is blacklisted.

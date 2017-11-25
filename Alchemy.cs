@@ -6,17 +6,18 @@ using System.Threading.Tasks;
 using StardewValley;
 using EquivalentExchange;
 using Microsoft.Xna.Framework;
+using StardewValley.Tools;
 
 namespace EquivalentExchange
 {
     public class Alchemy
     {
         //constants for storing some important formula values as non-magic numbers, this is the impact level ups and other factors have on formulas, stored in constants for easy edits.
-        public const double TRANSMUTATION_BONUS_PER_LEVEL = 0.2D;
-        public const double LIQUIDATION_BONUS_PER_LEVEL = 0.02D;
+        //public const double TRANSMUTATION_BONUS_PER_LEVEL = 0.2D;
+        //public const double LIQUIDATION_BONUS_PER_LEVEL = 0.02D;
         public const double SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL = 0.075D;
-        public const double BASE_VALUE_COEFFICIENT = 0.8D;
-        public const double BASE_COST_COEFFICIENT = 3D;
+        //public const double BASE_VALUE_COEFFICIENT = 0.8D;
+        //public const double BASE_COST_COEFFICIENT = 3D;
         public const double LUCK_REBOUND_IMPACT = 0.01D;
         public const double BASE_REBOUND_RATE = 0.05D;
         public const double SHAPER_DAILY_LUCK_BONUS = 2D;
@@ -126,7 +127,8 @@ namespace EquivalentExchange
         internal static double GetTransmutationMarkupPercentage(int whichLevel)
         {
             //base of 3.0 - 0.1 per skill level - profession modifiers
-            return BASE_COST_COEFFICIENT - (TRANSMUTATION_BONUS_PER_LEVEL * whichLevel);
+            return 1.0D;
+            //return BASE_COST_COEFFICIENT - (TRANSMUTATION_BONUS_PER_LEVEL * whichLevel);
         }
 
         internal static double GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(int whichLevel, int luckLevel)
@@ -137,7 +139,8 @@ namespace EquivalentExchange
         internal static double GetLiquidationValuePercentage(int whichLevel)
         {
             //base of 0.5 + 0.03 per skill level + profession modifiers
-            return BASE_VALUE_COEFFICIENT + (LIQUIDATION_BONUS_PER_LEVEL * whichLevel);
+            return 1.0D;
+            //return BASE_VALUE_COEFFICIENT + (LIQUIDATION_BONUS_PER_LEVEL * whichLevel);
         }
 
         //check if the player failed a rebound check
@@ -213,9 +216,21 @@ namespace EquivalentExchange
         {
             if (IsLuckyTransmute())
                 return;
+
             if (Game1.player.professions.Contains(Professions.Conduit) && isItemWorthLessThanOnePercentOfMoney)
                 return;
-            Game1.player.Stamina -= (float)staminaCost;
+
+            double remainingStaminaCost = staminaCost;
+
+            //if you have any alkahestry energy, it will try to use as much as it can
+            double alkahestryCost = Math.Min(Alchemy.GetCurrentAlkahestryEnergy(), staminaCost);
+
+            //and deduct that from whatever stamina cost might be left over (which may be all of it)
+            remainingStaminaCost -= alkahestryCost;
+
+            Alchemy.ReduceAlkahestryEnergy(alkahestryCost);
+            
+            Game1.player.Stamina -= (float)remainingStaminaCost;                        
         }
 
         public static void HandleTransmuteEvent(Item heldItem, int actualValue)
@@ -245,7 +260,7 @@ namespace EquivalentExchange
             if (Game1.player.money >= totalCost)
             {                
                 //if the player lacks the stamina to execute a transmute, abort
-                if (Game1.player.Stamina <= staminaCost)
+                if (Game1.player.Stamina - 1F + Alchemy.GetCurrentAlkahestryEnergy() <= staminaCost)
                 {
                     return;
                 }
@@ -274,6 +289,8 @@ namespace EquivalentExchange
                     Alchemy.HandleStaminaDeduction(staminaCost, true);
 
                     Game1.player.Money -= totalCost;
+
+                    Alchemy.IncreaseTotalTransmuteValue(totalCost);
 
                     Item spawnedItem = heldItem.getOne();
 
@@ -323,7 +340,7 @@ namespace EquivalentExchange
             double staminaCost = (isItemWorthLessThanOnePercentOfMoney && Game1.player.professions.Contains(Professions.Conduit)) ? 0D : Alchemy.GetStaminaCostForTransmutation(actualValue);
 
             //if the player lacks the stamina to execute a transmute, abort
-            if (Game1.player.Stamina <= staminaCost)
+            if (Game1.player.Stamina - 1F + Alchemy.GetCurrentAlkahestryEnergy() <= staminaCost)
             {
                 return;
             }
@@ -362,6 +379,8 @@ namespace EquivalentExchange
 
                 Game1.player.reduceActiveItemByOne();
 
+                Alchemy.IncreaseTotalTransmuteValue(totalValue);
+
                 //the percentage of experience you get is increased by the lossiness of the transmute
                 //as you increase in levels, this amount diminishes to a minimum of 1.
                 double experienceValueCoefficient = 1D - Alchemy.GetLiquidationValuePercentage();
@@ -381,6 +400,32 @@ namespace EquivalentExchange
                 Alchemy.TakeDamageFromRebound(reboundDamageTaken);
                 SoundUtil.PlayReboundSound();
             }
+        }
+
+        public static float GetCurrentAlkahestryEnergy()
+        {
+            return EquivalentExchange.instance.currentPlayerData.AlkahestryCurrentEnergy;
+        }
+
+        public static float GetMaxAlkahestryEnergy()
+        {
+            return EquivalentExchange.instance.currentPlayerData.AlkahestryMaxEnergy;
+        }
+
+        public static void IncreaseTotalTransmuteValue (int transmuteValue)
+        {
+            EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted += transmuteValue;
+            EquivalentExchange.instance.currentPlayerData.AlkahestryMaxEnergy = (int)Math.Floor(Math.Sqrt(EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted));
+        }
+
+        public static void ReduceAlkahestryEnergy(double energyCost)
+        {
+            EquivalentExchange.instance.currentPlayerData.AlkahestryCurrentEnergy -= (float)energyCost;
+        }
+
+        internal static void RestoreAlkahestryEnergyForNewDay()
+        {
+            EquivalentExchange.instance.currentPlayerData.AlkahestryCurrentEnergy = EquivalentExchange.instance.currentPlayerData.AlkahestryMaxEnergy;
         }
 
         public static void HandleNormalizeEvent(Item heldItem, int actualValue)
@@ -466,6 +511,78 @@ namespace EquivalentExchange
 
             //floored, any excess is truncated. Sorry math.
             Game1.player.Money += (int)Math.Floor(remainder);
+        }
+
+        //this was almost entirely stolen from spacechase0 with very little contribution on my part.
+        internal static void HandleToolTransmute(Tool tool)
+        {
+            int alchemyLevel = (int)Math.Floor(Math.Round(EquivalentExchange.instance.currentPlayerData.AlchemyLevel / 3D));
+            int toolLevel = tool.UpgradeLevel;
+
+            //set last user to dodge a null pointer
+            var toolPlayerFieldReflector = tool.GetType().GetField("lastUser", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            toolPlayerFieldReflector.SetValue(tool, Game1.player);
+            
+            //I wrote this part, basically.
+            double mouseX = (double)(Game1.getMouseX() + Game1.viewport.X - Game1.player.getStandingX());
+            double mouseY = (double)(Game1.getMouseY() + Game1.viewport.Y - Game1.player.getStandingY());
+
+            //figure out where the cursor position should be, relative to the player.
+            Point hitLocation = new Point((int)Math.Round((mouseX + Game1.player.getStandingX() - (Game1.tileSize / 2)) / Game1.tileSize), (int)Math.Round((mouseY + Game1.player.getStandingY() - (Game1.tileSize / 2)) / Game1.tileSize));            
+
+            GameLocation currentPlayerLocation = Game1.player.currentLocation;
+
+            bool performedAction = false;
+
+            for (int xOffset = -alchemyLevel; xOffset <= alchemyLevel; xOffset++)
+            {
+                for (int yOffset = -alchemyLevel; yOffset <= alchemyLevel; yOffset++)
+                {
+                    if (Alchemy.GetCurrentAlkahestryEnergy() + Game1.player.Stamina - 2F <= 0)
+                        return;
+                    
+                    Vector2 offsetPosition = new Vector2(xOffset + hitLocation.X, yOffset + hitLocation.Y);
+
+                    if (currentPlayerLocation.objects.ContainsKey(offsetPosition))
+                    {
+                        StardewValley.Object hitObject = currentPlayerLocation.objects[offsetPosition];
+                        if (hitObject.performToolAction(tool))
+                        {
+                            if (tool is StardewValley.Tools.Axe)
+                            {
+                                //stolen from spacechase0, I don't know what this means..
+                                if (hitObject.type == "Crafting" && hitObject.fragility != 2)
+                                {
+                                    //unclear what this does yet.
+                                    currentPlayerLocation.debris.Add(new Debris(hitObject.bigCraftable ? -hitObject.parentSheetIndex : hitObject.parentSheetIndex, offsetPosition, offsetPosition));
+                                }
+                                hitObject.performRemoveAction(offsetPosition, currentPlayerLocation);
+                                currentPlayerLocation.objects.Remove(offsetPosition);
+                                Alchemy.HandleStaminaDeduction(1, false);
+                                Alchemy.AddAlchemyExperience(1);
+                                Alchemy.IncreaseTotalTransmuteValue(1);
+                                SoundUtil.PlayMagickySound();
+                                performedAction = true;
+                            } else if(tool is StardewValley.Tools.Pickaxe)
+                            {
+                                var oldStamina = Game1.player.stamina;
+                                tool.DoFunction(currentPlayerLocation, (int)offsetPosition.X * Game1.tileSize, (int)offsetPosition.Y * Game1.tileSize, 0, Game1.player);
+                                //restore stamina prior to pickaxe function
+                                Game1.player.stamina = oldStamina;
+                                Alchemy.HandleStaminaDeduction(1, false);
+                                Alchemy.AddAlchemyExperience(1);
+                                Alchemy.IncreaseTotalTransmuteValue(1);
+                                performedAction = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (performedAction)
+            {
+                SoundUtil.PlayMagickySound();
+            }
         }
     }
 }

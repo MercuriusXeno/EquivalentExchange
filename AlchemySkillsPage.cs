@@ -62,7 +62,7 @@ namespace EquivalentExchange
             {
                 int whichProfession = Professions.getProfessionForSkill(skillIndex + 1);
                 string professionBlurb = Professions.GetProfessionTitleFromNumber(whichProfession);
-                string professionTitle = AlchemyLevelUpMenu.GetProfessionDescription(whichProfession);
+                string professionTitle = Professions.GetProfessionDescription(whichProfession);
                 bool flag = EquivalentExchange.instance.currentPlayerData.AlchemyLevel > skillIndex;
                 
                 if (flag && (skillIndex + 1) % 5 == 0)
@@ -132,7 +132,7 @@ namespace EquivalentExchange
                 skillBar.scale = (float)Game1.pixelZoom;
                 if (skillBar.containsPoint(x, y) && skillBar.hoverText.Length > 0 && !skillBar.name.Equals("-1"))
                 {
-                    this.hoverText = AlchemyLevelUpMenu.GetProfessionDescription(Convert.ToInt32(skillBar.name));
+                    this.hoverText = Professions.GetProfessionDescription(Convert.ToInt32(skillBar.name));
                     this.hoverTitle = Professions.GetProfessionTitleFromNumber(Convert.ToInt32(skillBar.name));
                     this.professionImage = DrawingUtil.GetProfessionTexture(Convert.ToInt32(skillBar.name));
                     skillBar.scale = 0.0f;

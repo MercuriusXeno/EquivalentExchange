@@ -66,6 +66,8 @@ namespace EquivalentExchange
             public static string SageIcon = $"sageProfessionIcon.png";
             public static string AurumancerIcon = $"aurumancerProfessionIcon.png";
             public static string ConduitIcon = $"conduitProfessionIcon.png";
+            public static string AlchemyBarSpriteBackground = $"alchemyBarBackground.png";
+            public static string AlchemyBarSpriteForeground = $"alchemyBarForeground.png";
         }
 
         public static Texture2D alchemySkillIcon;
@@ -76,6 +78,8 @@ namespace EquivalentExchange
         public static Texture2D alchemySageIcon;
         public static Texture2D alchemyAurumancerIcon;
         public static Texture2D alchemyConduitIcon;
+        public static Texture2D alchemyBarSprite;
+        public static Texture2D alchemyBarFillSprite;
 
         public static string assetPrefix = "assets\\";
 
@@ -90,6 +94,8 @@ namespace EquivalentExchange
             alchemySageIcon = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SageIcon}");
             alchemyAurumancerIcon = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AurumancerIcon}");
             alchemyConduitIcon = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.ConduitIcon}");
+            alchemyBarSprite = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AlchemyBarSpriteBackground}");
+            alchemyBarFillSprite = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AlchemyBarSpriteForeground}");
         }
 
         internal static Texture2D GetProfessionTexture(int profession)
