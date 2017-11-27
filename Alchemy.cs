@@ -568,11 +568,14 @@ namespace EquivalentExchange
                     {
                         if (isAxe || isScythe || isPickaxe || isHoe)
                         {
+                            var snapshotPlayerExperience = Game1.player.experiencePoints;
                             performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+                            RestorePlayerExperience(snapshotPlayerExperience);
                             if (performedAction && !isScythe)
                             {
                                 HandleToolTransmuteConsequence();
                             }
+                            
                         }
                     }
                     else if (currentPlayerLocation.terrainFeatures.ContainsKey(offsetPosition))
@@ -583,9 +586,11 @@ namespace EquivalentExchange
                         //don't break stumps unless the player is in precision mode.
                         if (terrainFeature is Tree && isAxe && (!(terrainFeature as Tree).stump || EquivalentExchange.IsShiftKeyPressed()))
                         {
+                            var snapshotPlayerExperience = Game1.player.experiencePoints;
                             //trees get removed automatically
                             performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
-                            
+                            RestorePlayerExperience(snapshotPlayerExperience);
+
                             if (performedAction)
                             {                            
                                 HandleToolTransmuteConsequence();
@@ -594,12 +599,14 @@ namespace EquivalentExchange
                         else if (terrainFeature is Grass && currentPlayerLocation is Farm && isScythe)
                         {
                             int oldHay = (currentPlayerLocation as Farm).piecesOfHay;
+                            var snapshotPlayerExperience = Game1.player.experiencePoints;
                             if (terrainFeature.performToolAction(tool, 0, offsetPosition))
                             {
                                 currentPlayerLocation.terrainFeatures.Remove(offsetPosition);
                                 //HandleToolTransmuteConsequence(); Scythe transmute is special and doesn't cost anything, but you don't get experience.
                                 performedAction = true;
                             }
+                            RestorePlayerExperience(snapshotPlayerExperience);
 
                             //hay get! spawn the sprite animation for acquisition of hay
                             if (oldHay < (currentPlayerLocation as Farm).piecesOfHay)
@@ -610,8 +617,11 @@ namespace EquivalentExchange
                         else if (terrainFeature is HoeDirt && isWateringCan && (tool as WateringCan).WaterLeft > 0)
                         {
                             //state of 0 is unwatered.
-                            if ((terrainFeature as HoeDirt).state != 1) {
+                            if ((terrainFeature as HoeDirt).state != 1)
+                            {
+                                var snapshotPlayerExperience = Game1.player.experiencePoints;
                                 terrainFeature.performToolAction(tool, 0, offsetPosition);
+                                RestorePlayerExperience(snapshotPlayerExperience);
                                 (tool as WateringCan).WaterLeft = (tool as WateringCan).WaterLeft - 1;
                                 SpawnWateringCanAnimationSprite(currentPlayerLocation, offsetPosition);
                                 HandleToolTransmuteConsequence();
@@ -620,7 +630,9 @@ namespace EquivalentExchange
                         }
                         else if (isPickaxe && terrainFeature is HoeDirt)
                         {
+                            var snapshotPlayerExperience = Game1.player.experiencePoints;
                             performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+                            RestorePlayerExperience(snapshotPlayerExperience);
 
                             if (performedAction)
                             {
@@ -659,7 +671,9 @@ namespace EquivalentExchange
                     }
                     else if (isHoe)
                     {
+                        var snapshotPlayerExperience = Game1.player.experiencePoints;
                         performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+                        RestorePlayerExperience(snapshotPlayerExperience);
 
                         if (performedAction)
                         {
@@ -672,6 +686,14 @@ namespace EquivalentExchange
             if (performedAction)
             {
                 SoundUtil.PlayMagickySound();
+            }
+        }
+
+        private static void RestorePlayerExperience(int[] snapshotPlayerExperience)
+        {
+            for (int i = 0; i < Game1.player.experiencePoints.Length; i++)
+            {
+                Game1.player.experiencePoints[i] = snapshotPlayerExperience[i];
             }
         }
 
@@ -906,6 +928,7 @@ namespace EquivalentExchange
             Vector2 vector2 = new Vector2((float)(x + 0.5), (float)(y + 0.5));
             if (tool is MeleeWeapon && tool.name.ToLower().Contains("scythe"))
             {
+                var snapshotPlayerExperience = Game1.player.experiencePoints;
                 if (location.objects[index] != null)
                 {
                     StardewValley.Object hitObject = location.objects[index];
@@ -925,9 +948,11 @@ namespace EquivalentExchange
                     location.terrainFeatures.Remove(index);
                     performedAction = true;
                 }
+                RestorePlayerExperience(snapshotPlayerExperience);
             }
             else if (tool is Axe)
             {
+                var snapshotPlayerExperience = Game1.player.experiencePoints;
                 Rectangle rectangle = new Rectangle(x * Game1.tileSize, y * Game1.tileSize, Game1.tileSize, Game1.tileSize);                
                 location.performToolAction(tool, x, y);
                 if (location.terrainFeatures.ContainsKey(index) && location.terrainFeatures[index].performToolAction(tool, 0, index, (GameLocation)null))
@@ -963,16 +988,17 @@ namespace EquivalentExchange
                     double x1 = (double)boundingBox.Center.X;
                     boundingBox = who.GetBoundingBox();
                     double y1 = (double)boundingBox.Center.Y;
-                    Vector2 playerPosition = new Vector2((float)x1, (float)y1);
-                    Debris debris2 = new Debris(objectIndex, toolLocation, playerPosition);
+                    Debris debris2 = new Debris(objectIndex, toolLocation, index);
                     debris1.Add(debris2);
                 }
                 location.Objects[index].performRemoveAction(index, location);
                 location.Objects.Remove(index);
                 performedAction = true;
+                RestorePlayerExperience(snapshotPlayerExperience);
             }
             else if (tool is Pickaxe)
             {
+                var snapshotPlayerExperience = Game1.player.experiencePoints;
                 int power = who.toolPower;
                 if (location.performToolAction(tool, x, y))
                     return true;
@@ -1062,6 +1088,7 @@ namespace EquivalentExchange
                         Game1.currentLocation.Objects.Remove(index);
                         performedAction = true;
                     }
+                    RestorePlayerExperience(snapshotPlayerExperience);
                 }
                 else
                 {
@@ -1076,6 +1103,7 @@ namespace EquivalentExchange
             }
             else if (tool is Hoe)
             {
+                var snapshotPlayerExperience = Game1.player.experiencePoints;
                 if (location.terrainFeatures.ContainsKey(index))
                 {
                     if (location.terrainFeatures[index].performToolAction(tool, 0, index, (GameLocation)null))
@@ -1125,6 +1153,7 @@ namespace EquivalentExchange
                         }
                     }
                 }
+                RestorePlayerExperience(snapshotPlayerExperience);
             }
             return performedAction;
         }

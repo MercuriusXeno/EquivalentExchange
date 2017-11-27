@@ -1,7 +1,8 @@
 ﻿{    
     "Level": "Level",
     "Alchemy": "Alchemy",
-	"LeylineDistanceNegatedBy": "Leyline distance negated by",
+    "LuckyTransmute": "Lucky transmute",
+	"LeylineDistanceNegatedBy": "Leyline distance negated by",    
 	"StaminaDrain": "Stamina drain",
 	"Shaper": "Shaper",
 	"Sage": "Sage",
