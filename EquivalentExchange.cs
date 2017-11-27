@@ -111,7 +111,7 @@ namespace EquivalentExchange
         {            
             //checking for paused or menuUp doesn't return true for some reason, but this is
             //a reliable way to check to see if the player is in a menu to prevent regen.
-            if (Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu is GameMenu)
+            if (Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu != null)
                 return;            
 
             double leylineDistance = Math.Min(10D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation));

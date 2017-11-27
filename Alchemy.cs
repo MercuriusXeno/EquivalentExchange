@@ -214,7 +214,7 @@ namespace EquivalentExchange
         }
 
         //handles draining stamina on successful transmute, and checking for lucky transmutes.
-        public static void HandleStaminaDeduction(double staminaCost, bool isItemWorthLessThanOnePercentOfMoney)
+        public static void HandleAlchemyEnergyDeduction(double staminaCost, bool isItemWorthLessThanOnePercentOfMoney)
         {
             if (IsLuckyTransmute())
                 return;
@@ -288,7 +288,7 @@ namespace EquivalentExchange
 
                     didTransmuteOccur = true;                    
                     
-                    Alchemy.HandleStaminaDeduction(staminaCost, true);
+                    Alchemy.HandleAlchemyEnergyDeduction(staminaCost, true);
 
                     Game1.player.Money -= totalCost;
 
@@ -369,7 +369,7 @@ namespace EquivalentExchange
                 //if we reached this point transmutation will succeed
                 didTransmuteOccur = true;
                 
-                Alchemy.HandleStaminaDeduction(staminaCost, false);
+                Alchemy.HandleAlchemyEnergyDeduction(staminaCost, false);
 
                 //we floor the math here because we don't want weirdly divergent values based on stack count - the rate is fixed regardless of quantity
                 //this occurs at the expense of rounding - liquidation is lossy.
@@ -556,7 +556,7 @@ namespace EquivalentExchange
                 {
                     if (!isScythe)
                     {
-                        if (Alchemy.GetCurrentAlkahestryEnergy() + Game1.player.Stamina - 2F <= 0)
+                        if (Alchemy.GetCurrentAlkahestryEnergy() + Game1.player.Stamina - (GetToolTransmutationEnergyCost() + 1) <= 0)
                             return;
                     }
 
@@ -660,9 +660,14 @@ namespace EquivalentExchange
             });
         }
 
+        private static double GetToolTransmutationEnergyCost()
+        {
+            return BASE_TOOL_TRANSMUTE_COST_PER_ACTION * GetAlchemyEnergyCostSkillMultiplier();
+        }
+
         private static void HandleToolTransmuteConsequence()
         {            
-            Alchemy.HandleStaminaDeduction(BASE_TOOL_TRANSMUTE_COST_PER_ACTION * GetAlchemyEnergyCostSkillMultiplier(), false);
+            Alchemy.HandleAlchemyEnergyDeduction(GetToolTransmutationEnergyCost(), false);
             Alchemy.AddAlchemyExperience(BASE_TOOL_TRANSMUTE_COST_PER_ACTION);
             Alchemy.IncreaseTotalTransmuteValue(BASE_TOOL_TRANSMUTE_COST_PER_ACTION);
         }
