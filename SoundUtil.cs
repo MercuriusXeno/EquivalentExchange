@@ -13,7 +13,7 @@ namespace EquivalentExchange
         //play sound method wired up to handle configurable sound delay
         public static void PlaySound(string sound)
         {
-            Game1.playSound(sound);
+            Game1.playSound(sound);            
         }
 
         //a nice magicky sound suggested by spacechase0

@@ -4,6 +4,8 @@ using Microsoft.Xna.Framework;
 using StardewValley.Tools;
 using StardewValley.TerrainFeatures;
 using System.Collections.Generic;
+using System.Reflection;
+using StardewValley.Locations;
 //using xTile.ObjectModel;
 //using xTile.Dimensions;
 
@@ -623,6 +625,35 @@ namespace EquivalentExchange
                             if (performedAction)
                             {
                                 HandleToolTransmuteConsequence();
+                            }                         
+                        }
+                    }
+                    else if ((isPickaxe || isAxe))
+                    {
+                        var largeResourceClusters = (List<ResourceClump>)currentPlayerLocation.GetType().GetField("resourceClumps", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance).GetValue(currentPlayerLocation);
+                        if (currentPlayerLocation is Woods)
+                            largeResourceClusters = (currentPlayerLocation as Woods).stumps;
+                        if (largeResourceClusters != null)
+                        {
+                            foreach (var resourceCluster in largeResourceClusters)
+                            {
+                                if (new Rectangle((int)resourceCluster.tile.X, (int)resourceCluster.tile.Y, resourceCluster.width, resourceCluster.height).Contains((int)offsetPosition.X, (int)offsetPosition.Y))
+                                {
+                                    if (TryToDestroyResourceCluster(resourceCluster, tool, 1, offsetPosition))
+                                    {
+                                        performedAction = true;
+                                        if (resourceCluster.health <= 0)
+                                        {
+                                            largeResourceClusters.Remove(resourceCluster);
+                                        }
+                                    }
+
+                                    if (performedAction)
+                                    {
+                                        HandleToolTransmuteConsequence();
+                                    }
+                                    break;
+                                }
                             }
                         }
                     }
@@ -642,6 +673,199 @@ namespace EquivalentExchange
             {
                 SoundUtil.PlayMagickySound();
             }
+        }
+
+        //this is a cold copy of the performToolAction from resource cluster with all the dialog warnings removed
+        //using reflection to set the shake timer since it's private.
+        private static bool TryToDestroyResourceCluster(ResourceClump resourceCluster, Tool tool, int damage, Vector2 offsetPosition)
+        {
+            if (resourceCluster.tile != offsetPosition)
+            {
+                offsetPosition = resourceCluster.tile;
+            }
+            bool performedAction = false;
+            if (tool == null)
+                return performedAction;
+            int debrisType = 12;
+            switch (resourceCluster.parentSheetIndex)
+            {
+                case 622:
+                    if (tool is Pickaxe && tool.upgradeLevel < 3)
+                    {
+                        Game1.playSound("clubhit");
+                        Game1.playSound("clank");
+                        Game1.player.jitterStrength = 1f;
+                        return performedAction;
+                    }
+                    if (!(tool is Pickaxe))
+                        return false;
+                    Game1.playSound("hammer");
+                    debrisType = 14;
+                    break;
+                case 672:
+                    if (tool is Pickaxe && tool.upgradeLevel < 2)
+                    {
+                        Game1.playSound("clubhit");
+                        Game1.playSound("clank");
+                        Game1.player.jitterStrength = 1f;
+                        return performedAction;
+                    }
+                    if (!(tool is Pickaxe))
+                        return performedAction;
+                    Game1.playSound("hammer");
+                    debrisType = 14;
+                    break;
+                case 752:
+                case 754:
+                case 756:
+                case 758:
+                    if (!(tool is Pickaxe))
+                        return performedAction;
+                    Game1.playSound("hammer");
+                    debrisType = 14;
+                    
+                    //set shake timer with reflection, because it is private.
+                    var resourceClusterShakeTimerFieldReflector = resourceCluster.GetType().GetField("shakeTimer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    resourceClusterShakeTimerFieldReflector.SetValue(resourceCluster, 500F);
+                    break;
+                case 600:
+                    if (tool is Axe && tool.upgradeLevel < 1)
+                    {
+                        Game1.playSound("axe");
+                        Game1.player.jitterStrength = 1f;
+                        return performedAction;
+                    }
+                    if (!(tool is Axe))
+                        return performedAction;
+                    Game1.playSound("axchop");
+                    break;
+                case 602:
+                    if (tool is Axe && tool.upgradeLevel < 2)
+                    {
+                        Game1.playSound("axe");
+                        Game1.player.jitterStrength = 1f;
+                        return performedAction;
+                    }
+                    if (!(tool is Axe))
+                        return performedAction;
+                    Game1.playSound("axchop");
+                    break;
+            }
+            performedAction = true;
+            resourceCluster.health = resourceCluster.health - Math.Max(1f, (float)(tool.upgradeLevel + 1) * 0.75f);
+            Game1.createRadialDebris(Game1.currentLocation, debrisType, (int)offsetPosition.X + Game1.random.Next(resourceCluster.width / 2 + 1), (int)offsetPosition.Y + Game1.random.Next(resourceCluster.height / 2 + 1), Game1.random.Next(4, 9), false, -1, false, -1);
+            if ((double)resourceCluster.health <= 0.0)
+            {
+                if (Game1.IsMultiplayer)
+                {
+                    Random multiplayerRandom1 = Game1.recentMultiplayerRandom;
+                }
+                else
+                {
+                    Random random1 = new Random((int)((double)Game1.uniqueIDForThisGame + (double)offsetPosition.X * 7.0 + (double)offsetPosition.Y * 11.0 + (double)Game1.stats.DaysPlayed + (double)resourceCluster.health));
+                }
+                switch (resourceCluster.parentSheetIndex)
+                {
+                    case 622:
+                        int number1 = 6;
+                        if (Game1.IsMultiplayer)
+                        {
+                            Game1.recentMultiplayerRandom = new Random((int)offsetPosition.X * 1000 + (int)offsetPosition.Y);
+                            Random multiplayerRandom2 = Game1.recentMultiplayerRandom;
+                        }
+                        else
+                        {
+                            Random random2 = new Random((int)Game1.uniqueIDForThisGame + (int)Game1.stats.DaysPlayed + (int)offsetPosition.X * 7 + (int)offsetPosition.Y * 11);
+                        }
+                        if (Game1.IsMultiplayer)
+                        {
+                            Game1.createMultipleObjectDebris(386, (int)offsetPosition.X, (int)offsetPosition.Y, number1, tool.getLastFarmerToUse().uniqueMultiplayerID);
+                            Game1.createMultipleObjectDebris(390, (int)offsetPosition.X, (int)offsetPosition.Y, number1, tool.getLastFarmerToUse().uniqueMultiplayerID);
+                            Game1.createMultipleObjectDebris(535, (int)offsetPosition.X, (int)offsetPosition.Y, 2, tool.getLastFarmerToUse().uniqueMultiplayerID);
+                        }
+                        else
+                        {
+                            Game1.createMultipleObjectDebris(386, (int)offsetPosition.X, (int)offsetPosition.Y, number1);
+                            Game1.createMultipleObjectDebris(390, (int)offsetPosition.X, (int)offsetPosition.Y, number1);
+                            Game1.createMultipleObjectDebris(535, (int)offsetPosition.X, (int)offsetPosition.Y, 2);
+                        }
+                        Game1.playSound("boulderBreak");
+                        Game1.createRadialDebris(Game1.currentLocation, 32, (int)offsetPosition.X, (int)offsetPosition.Y, Game1.random.Next(6, 12), false, -1, false, -1);
+                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(5, offsetPosition * (float)Game1.tileSize, Color.White, 8, false, 100f, 0, -1, -1f, -1, 0));
+                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(5, (offsetPosition + new Vector2(1f, 0.0f)) * (float)Game1.tileSize, Color.White, 8, false, 110f, 0, -1, -1f, -1, 0));
+                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(5, (offsetPosition + new Vector2(1f, 1f)) * (float)Game1.tileSize, Color.White, 8, true, 80f, 0, -1, -1f, -1, 0));
+                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(5, (offsetPosition + new Vector2(0.0f, 1f)) * (float)Game1.tileSize, Color.White, 8, false, 90f, 0, -1, -1f, -1, 0));
+                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(5, offsetPosition * (float)Game1.tileSize + new Vector2((float)(Game1.tileSize / 2), (float)(Game1.tileSize / 2)), Color.White, 8, false, 70f, 0, -1, -1f, -1, 0));
+                        return performedAction;
+                    case 672:
+                    case 752:
+                    case 754:
+                    case 756:
+                    case 758:
+                        int num = resourceCluster.parentSheetIndex == 672 ? 15 : 10;
+                        if (Game1.IsMultiplayer)
+                        {
+                            Game1.recentMultiplayerRandom = new Random((int)offsetPosition.X * 1000 + (int)offsetPosition.Y);
+                            Random multiplayerRandom2 = Game1.recentMultiplayerRandom;
+                        }
+                        else
+                        {
+                            Random random3 = new Random((int)Game1.uniqueIDForThisGame + (int)Game1.stats.DaysPlayed + (int)offsetPosition.X * 7 + (int)offsetPosition.Y * 11);
+                        }
+                        if (Game1.IsMultiplayer)
+                            Game1.createMultipleObjectDebris(390, (int)offsetPosition.X, (int)offsetPosition.Y, num, tool.getLastFarmerToUse().uniqueMultiplayerID);
+                        else
+                            Game1.createRadialDebris(Game1.currentLocation, 390, (int)offsetPosition.X, (int)offsetPosition.Y, num, false, -1, true, -1);
+                        Game1.playSound("boulderBreak");
+                        Game1.createRadialDebris(Game1.currentLocation, 32, (int)offsetPosition.X, (int)offsetPosition.Y, Game1.random.Next(6, 12), false, -1, false, -1);
+                        Color color = Color.White;
+                        switch (resourceCluster.parentSheetIndex)
+                        {
+                            case 752:
+                                color = new Color(188, 119, 98);
+                                break;
+                            case 754:
+                                color = new Color(168, 120, 95);
+                                break;
+                            case 756:
+                            case 758:
+                                color = new Color(67, 189, 238);
+                                break;
+                        }
+                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(48, offsetPosition * (float)Game1.tileSize, color, 5, false, 180f, 0, Game1.tileSize * 2, -1f, Game1.tileSize * 2, 0)
+                        {
+                            alphaFade = 0.01f
+                        });
+                        return performedAction;
+                    case 600:
+                    case 602:
+                        int number2 = resourceCluster.parentSheetIndex == 602 ? 8 : 2;
+                        if (Game1.IsMultiplayer)
+                        {
+                            Game1.recentMultiplayerRandom = new Random((int)offsetPosition.X * 1000 + (int)offsetPosition.Y);
+                            Random multiplayerRandom2 = Game1.recentMultiplayerRandom;
+                        }
+                        else
+                        {
+                            Random random4 = new Random((int)Game1.uniqueIDForThisGame + (int)Game1.stats.DaysPlayed + (int)offsetPosition.X * 7 + (int)offsetPosition.Y * 11);
+                        }
+                        if (Game1.IsMultiplayer)
+                            Game1.createMultipleObjectDebris(709, (int)offsetPosition.X, (int)offsetPosition.Y, number2, tool.getLastFarmerToUse().uniqueMultiplayerID);
+                        else
+                            Game1.createMultipleObjectDebris(709, (int)offsetPosition.X, (int)offsetPosition.Y, number2);
+                        Game1.playSound("stumpCrack");
+                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(23, offsetPosition * (float)Game1.tileSize, Color.White, 4, false, 140f, 0, Game1.tileSize * 2, -1f, Game1.tileSize * 2, 0));
+                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(Game1.animations, new Rectangle(385, 1522, (int)sbyte.MaxValue, 79), 2000f, 1, 1, offsetPosition * (float)Game1.tileSize + new Vector2(0.0f, 49f), false, false, 1E-05f, 0.016f, Color.White, 1f, 0.0f, 0.0f, 0.0f, false));
+                        Game1.createRadialDebris(Game1.currentLocation, 34, (int)offsetPosition.X, (int)offsetPosition.Y, Game1.random.Next(4, 9), false, -1, false, -1);
+                        return performedAction;
+                }
+            }
+            else
+            {
+                var resourceClusterShakeTimerFieldReflector = resourceCluster.GetType().GetField("shakeTimer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                resourceClusterShakeTimerFieldReflector.SetValue(resourceCluster, 100F);
+            }
+            return performedAction;        
         }
 
         private static void SpawnWateringCanAnimationSprite(GameLocation currentPlayerLocation, Vector2 offsetPosition)
@@ -814,56 +1038,7 @@ namespace EquivalentExchange
                         location.Objects.Remove(index);
                         Game1.playSound("stoneCrack");
                         performedAction = true;
-                    }
-                    else if (objectHit.Name.Contains("Boulder"))
-                    {
-                        if (tool.UpgradeLevel > 1)
-                        {
-                            Vector2 boulderVector = objectHit.tileLocation;
-                            if (Alchemy.BouldersStruck.ContainsKey(boulderVector))
-                            {
-                                Alchemy.BouldersStruck[boulderVector] += (power + 1);
-                                if (Alchemy.BouldersStruck[boulderVector] < 4)
-                                {
-                                    performedAction = true;
-                                    return performedAction;
-                                }
-                            }
-                            else
-                            {
-                                Alchemy.BouldersStruck.Add(boulderVector, 0);
-                                performedAction = true;
-                                return performedAction;
-                            }
-                            location.removeObject(index, false);
-                            location.temporarySprites.Add(new TemporaryAnimatedSprite(5, new Vector2((float)Game1.tileSize * index.X - (float)(Game1.tileSize / 2), (float)Game1.tileSize * (index.Y - 1f)), Color.Gray, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, -1, 0)
-                            {
-                                delayBeforeAnimationStart = 0
-                            });
-                            location.temporarySprites.Add(new TemporaryAnimatedSprite(5, new Vector2((float)Game1.tileSize * index.X + (float)(Game1.tileSize / 2), (float)Game1.tileSize * (index.Y - 1f)), Color.Gray, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, -1, 0)
-                            {
-                                delayBeforeAnimationStart = 200
-                            });
-                            location.temporarySprites.Add(new TemporaryAnimatedSprite(5, new Vector2((float)Game1.tileSize * index.X, (float)Game1.tileSize * (index.Y - 1f) - (float)(Game1.tileSize / 2)), Color.Gray, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, -1, 0)
-                            {
-                                delayBeforeAnimationStart = 400
-                            });
-                            location.temporarySprites.Add(new TemporaryAnimatedSprite(5, new Vector2((float)Game1.tileSize * index.X, (float)Game1.tileSize * index.Y - (float)(Game1.tileSize / 2)), Color.Gray, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, -1, 0)
-                            {
-                                delayBeforeAnimationStart = 600
-                            });
-                            location.temporarySprites.Add(new TemporaryAnimatedSprite(25, new Vector2((float)Game1.tileSize * index.X, (float)Game1.tileSize * index.Y), Color.White, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, Game1.tileSize * 2, 0));
-                            location.temporarySprites.Add(new TemporaryAnimatedSprite(25, new Vector2((float)Game1.tileSize * index.X + (float)(Game1.tileSize / 2), (float)Game1.tileSize * index.Y), Color.White, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, Game1.tileSize * 2, 0)
-                            {
-                                delayBeforeAnimationStart = 250
-                            });
-                            location.temporarySprites.Add(new TemporaryAnimatedSprite(25, new Vector2((float)Game1.tileSize * index.X - (float)(Game1.tileSize / 2), (float)Game1.tileSize * index.Y), Color.White, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, Game1.tileSize * 2, 0)
-                            {
-                                delayBeforeAnimationStart = 500
-                            });
-                            performedAction = true;
-                        }
-                    }
+                    }                    
                     else
                     {
                         if (!objectHit.performToolAction(tool))

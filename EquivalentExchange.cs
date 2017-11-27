@@ -127,7 +127,7 @@ namespace EquivalentExchange
         {
             if (!Helper.ModRegistry.IsLoaded("spacechase0.LuckSkill"))
             {
-                Log.info("Luck Skill not found");
+                //Log.info($"{LocalizationStrings.Get(LocalizationStrings.LuckSkillNotFound)}");
                 return;
             }
 
@@ -139,7 +139,7 @@ namespace EquivalentExchange
         {
             if (!Helper.ModRegistry.IsLoaded("spacechase0.CookingSkill"))
             {
-                Log.info("Cooking Skill not found");
+                //Log.info($"{LocalizationStrings.Get(LocalizationStrings.CookingSkillNotFound)}");
                 return;
             }
 
@@ -168,7 +168,7 @@ namespace EquivalentExchange
         {
             if (args.Length != 1)
             {
-                Log.info("Command format: giveAlchemyExp <amount>");
+                Log.info($"{LocalizationStrings.Get(LocalizationStrings.CommandFormat)}: giveAlchemyExp <{LocalizationStrings.Get(LocalizationStrings.amount)}>");
                 return;
             }
 
@@ -179,12 +179,12 @@ namespace EquivalentExchange
             }
             catch (Exception e)
             {
-                Log.error("Bad experience amount.");
+                Log.error($"{LocalizationStrings.Get(LocalizationStrings.BadExperienceAmount)}.");
                 return;
             }
 
             Alchemy.AddAlchemyExperience(amt);
-            Log.info("Added " + amt + " alchemy experience.");
+            Log.info($"{LocalizationStrings.Get(LocalizationStrings.Added)} " + amt + $" {LocalizationStrings.Get(LocalizationStrings.alchemyExperience)}.");
         }
 
         public List<int> showLevelUpMenusByRank = new List<int>();
@@ -307,7 +307,7 @@ namespace EquivalentExchange
                 }
             }
 
-            Log.debug($"Leyline distance on map transition now {DistanceCalculator.GetPathDistance(Game1.player.currentLocation)}");
+            //Log.debug($"{LocalizationStrings.Get(LocalizationStrings.LeylineDistanceOnMapTransitionsNow)} {DistanceCalculator.GetPathDistance(Game1.player.currentLocation)}");
         }
 
         //hooked for drawing the experience bar on screen when experience bars mod is present.
@@ -323,10 +323,10 @@ namespace EquivalentExchange
         {
             foreach (string leyline in VANILLA_LEYLINE_LOCATIONS)
             {
-                if (Game1.getLocationFromName(leyline) == null)
-                    Log.error($"{leyline} is missing, there is a very bad problem and you will not be going to space today.");
-                else
-                    Game1.getLocationFromName(leyline)?.map.Properties.Add(Alchemy.LEYLINE_PROPERTY_INDICATOR, 0F);
+                //if (Game1.getLocationFromName(leyline) == null)
+                //    Log.error($"{leyline} is missing, there is a very bad problem and you will not be going to space today.");
+                //else
+                Game1.getLocationFromName(leyline)?.map.Properties.Add(Alchemy.LEYLINE_PROPERTY_INDICATOR, 0F);
             }
         }
 
@@ -433,25 +433,25 @@ namespace EquivalentExchange
                     Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
 
                     //value
-                    string cost = $"Value {liquidateValue.ToString()}g";
+                    string cost = $"{LocalizationStrings.Get(LocalizationStrings.Value)} {liquidateValue.ToString()}g";
                     Game1.spriteBatch.DrawString(Game1.smallFont, cost, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
                     dialogPositionMarkerY += rowSpacing;
 
                     //luck
-                    string luck = $"Luck {luckyChance.ToString()}%";
+                    string luck = $"{LocalizationStrings.Get(LocalizationStrings.Luck)} {luckyChance.ToString()}%";
                     Game1.spriteBatch.DrawString(Game1.smallFont, luck, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
                     dialogPositionMarkerY += rowSpacing;
 
                     //Stam
-                    string stam = $"Energy -{staminaDrain.ToString()}";
+                    string stam = $"{LocalizationStrings.Get(LocalizationStrings.Energy)} -{staminaDrain.ToString()}";
                     Game1.spriteBatch.DrawString(Game1.smallFont, stam, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
                     dialogPositionMarkerY += rowSpacing;
 
                     //rebound info shows up if there's a chance to rebound
                     if (reboundChance > 0)
                     {
-                        string rebound = $"Fail {reboundChance.ToString()}%";
-                        string damage = $"HP -{reboundDamage.ToString()}";
+                        string rebound = $"{LocalizationStrings.Get(LocalizationStrings.Fail)} {reboundChance.ToString()}%";
+                        string damage = $"{LocalizationStrings.Get(LocalizationStrings.HP)} -{reboundDamage.ToString()}";
                         Game1.spriteBatch.DrawString(Game1.smallFont, rebound, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
                         dialogPositionMarkerY += rowSpacing;
                         Game1.spriteBatch.DrawString(Game1.smallFont, damage, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
@@ -483,10 +483,10 @@ namespace EquivalentExchange
 
                     int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
                     List<string> toolTransmuteDescription = new List<string>();
-                    toolTransmuteDescription.Add("Mouse over a weed");
-                    toolTransmuteDescription.Add($"{(heldItem is Axe ? "or stick" : "or stone")} and press");
-                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} to break it.");
-                    toolTransmuteDescription.Add($"Breaks a {sideLength}x{sideLength} area.");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.MouseOverWeeds)}");
+                    toolTransmuteDescription.Add($"{(heldItem is Axe ? $"{LocalizationStrings.Get(LocalizationStrings.orStick)}" : $"{LocalizationStrings.Get(LocalizationStrings.orStone)}")} {LocalizationStrings.Get(LocalizationStrings.andPress)}");
+                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} {LocalizationStrings.Get(LocalizationStrings.toBreakIt)}");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.BreaksA)} {sideLength}x{sideLength} {LocalizationStrings.Get(LocalizationStrings.area)}.");
 
                     foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
                     {
@@ -519,10 +519,10 @@ namespace EquivalentExchange
 
                     int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
                     List<string> toolTransmuteDescription = new List<string>();
-                    toolTransmuteDescription.Add("Mouse over weeds");
-                    toolTransmuteDescription.Add($"or grass and press");
-                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} to mow it down.");
-                    toolTransmuteDescription.Add($"Cuts a {sideLength}x{sideLength} area.");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.MouseOverWeeds)}");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.orGrassAndPress)}");
+                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} {LocalizationStrings.Get(LocalizationStrings.toMowItDown)}");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.CutsA)} {sideLength}x{sideLength} {LocalizationStrings.Get(LocalizationStrings.area)}");
 
                     foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
                     {
@@ -557,9 +557,9 @@ namespace EquivalentExchange
 
                     int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
                     List<string> toolTransmuteDescription = new List<string>();
-                    toolTransmuteDescription.Add("Mouse over tilled soil");
-                    toolTransmuteDescription.Add($"and press {EquivalentExchange.instance.Config.TransmuteKey.ToString()} to");
-                    toolTransmuteDescription.Add($"water a {sideLength}x{sideLength} area.");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.MouseOverTilledSoil)}");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.andPress)} {EquivalentExchange.instance.Config.TransmuteKey.ToString()} {LocalizationStrings.Get(LocalizationStrings.to)}");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.waterA)} {sideLength}x{sideLength} {LocalizationStrings.Get(LocalizationStrings.area)}.");
 
                     foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
                     {
@@ -594,10 +594,10 @@ namespace EquivalentExchange
 
                     int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
                     List<string> toolTransmuteDescription = new List<string>();
-                    toolTransmuteDescription.Add("Mouse over soil");
-                    toolTransmuteDescription.Add($"or grass and press");
-                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} to till the soil");
-                    toolTransmuteDescription.Add($"or break a {sideLength}x{sideLength} area.");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.MouseOverSoil)}");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.orGrassAndPress)}");
+                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} {LocalizationStrings.Get(LocalizationStrings.toTillTheSoil)}");
+                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.orBreakA)} {sideLength}x{sideLength} {LocalizationStrings.Get(LocalizationStrings.area)}.");
 
                     foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
                     {
@@ -863,13 +863,13 @@ namespace EquivalentExchange
         {
             if (!Helper.ModRegistry.IsLoaded("spacechase0.ExperienceBars"))
             {
-                Log.info("Experience Bars not found");
+                //Log.info($"{LocalizationStrings.Get(LocalizationStrings.ExperienceBarsNotFound)}");
                 return;
             }
 
             hasAllProfessionsMod = true;
 
-            Log.info("Experience Bars mod found, adding alchemy experience bar renderer.");
+            //Log.info($"{LocalizationStrings.Get(LocalizationStrings.ExperienceBarsFound)}");
         }
 
         public static bool hasAllProfessionsMod = false;
@@ -877,11 +877,11 @@ namespace EquivalentExchange
         {
             if (!eeHelper.ModRegistry.IsLoaded("community.AllProfessions"))
             {
-                Log.info("All Professions not found.");
+                //Log.info($"{LocalizationStrings.Get(LocalizationStrings.AllProfessionsNotFound)}");
                 return;
             }
 
-            Log.info("All Professions mod found. You will get every alchemy profession for your level.");
+            //Log.info($"{LocalizationStrings.Get(LocalizationStrings.AllProfessionsFound)}");
             hasAllProfessionsMod = true;
         }
     }

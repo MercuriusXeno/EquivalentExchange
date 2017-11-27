@@ -175,7 +175,7 @@ namespace EquivalentExchange
                 int index2 = this.skillOrderIndex;
                 bool flag1 = EquivalentExchange.instance.currentPlayerData.AlchemyLevel > index1;
                 bool flag2 = EquivalentExchange.instance.showLevelUpMenusByRank.Count > 0;
-                string text = (index1 == 0 ? "Alchemy" : "");
+                string text = (index1 == 0 ? $"{LocalizationStrings.Get(LocalizationStrings.Alchemy)}" : "");
                 int number = EquivalentExchange.instance.currentPlayerData.AlchemyLevel;
                 Rectangle rectangle = Rectangle.Empty;
                 //alchemy skill text             

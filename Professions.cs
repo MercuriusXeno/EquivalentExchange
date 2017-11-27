@@ -92,17 +92,17 @@ namespace EquivalentExchange
             switch (whichProfession)
             {
                 case Professions.Shaper:
-                    return "Shaper";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.Shaper) }";
                 case Professions.Sage:
-                    return "Sage";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.Sage) }";
                 case Professions.Transmuter:
-                    return "Transmuter";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.Transmuter) }";
                 case Professions.Adept:
-                    return "Adept";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.Adept) }";
                 case Professions.Aurumancer:
-                    return "Aurumancer";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.Aurumancer) }";
                 case Professions.Conduit:
-                    return "Conduit";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.Conduit) }";
                 default:
                     return null;
             }
@@ -113,19 +113,17 @@ namespace EquivalentExchange
             switch (whichProfession)
             {
                 case Professions.Shaper:
-                    return "Lucky transmutes affected by daily luck twice as much (1-25% is now 2-50%).";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.ShaperDescription) }";
                 case Professions.Sage:
-                    return $"When you rebound, you still take damage but you succeed anyway.";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.SageDescription) }";
                 case Professions.Transmuter:
-                    double nextCoefficientCost = Alchemy.GetTransmutationMarkupPercentage(10) * 100D;
-                    return $"Transmutation (item creation only) is twice as lucky.";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.TransmuterDescription) }";
                 case Professions.Adept:
-                    return $"Leyline proximity increases your lucky rate up to 15%.";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.AdeptDescription) }";
                 case Professions.Aurumancer:
-                    double nextCoefficientValue = Alchemy.GetLiquidationValuePercentage(10) * 100D;
-                    return $"Liquidation of items worth less than 1% of your current money can't rebound.";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.AurumancerDescription) }";
                 case Professions.Conduit:
-                    return $"Transmutation or liquidation worth less than 1% of your money doesn't cost stamina.";
+                    return $"{ LocalizationStrings.Get(LocalizationStrings.ConduitDescription) }";
             }
             return "";
         }

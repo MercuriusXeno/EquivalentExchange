@@ -70,6 +70,7 @@
     <Compile Include="Events\OvernightEvent.cs" />
     <Compile Include="DistanceCalculator.cs" />
     <Compile Include="EquivalentExchange.cs" />
+    <Compile Include="LocalizationStrings.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="Models\ModConfigModel.cs" />
     <Compile Include="Professions.cs" />
@@ -79,6 +80,9 @@
     <Compile Include="Util.cs" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="i18n\default.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="manifest.json" />
     <None Include="packages.config" />
   </ItemGroup>
