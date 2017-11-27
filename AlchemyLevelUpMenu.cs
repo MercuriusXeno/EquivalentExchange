@@ -135,7 +135,7 @@ namespace EquivalentExchange
             //string coefficientCost = $"Cost: {nextCoefficientCost.ToString()}% Value: {nextCoefficientValue.ToString()}%";
             double luckyTransmuteMinimum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + 0.01) * 100);
             double luckyTransmuteMaximum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + Alchemy.LUCK_NORMALIZATION_FOR_FREE_TRANSMUTES) * 100);
-            string luckyTransmuteChance = $"Lucky transmutes: {luckyTransmuteMinimum.ToString()}-{luckyTransmuteMaximum.ToString()}% Stamina drain -{ ((1 - Alchemy.GetAlchemyStaminaCostSkillMultiplierForLevel(whichLevel)) * 100).ToString() }%";
+            string luckyTransmuteChance = $"Lucky transmutes: {luckyTransmuteMinimum.ToString()}-{luckyTransmuteMaximum.ToString()}% Stamina drain -{ ((1 - Alchemy.GetAlchemyEnergyCostSkillMultiplierForLevel(whichLevel)) * 100).ToString() }%";
             string distanceFromTowerImpact = $"Leyline distance negated by { (whichLevel) }.";            
             List<string> extraInfoList = new List<string>();
             //extraInfoList.Add(coefficientCost);

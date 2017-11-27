@@ -11,6 +11,7 @@ using System.Reflection;
 using StardewValley.Menus;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using StardewValley.Tools;
 
 namespace EquivalentExchange
 {
@@ -59,31 +60,27 @@ namespace EquivalentExchange
             //set texture files in memory, they're tiny things.
             DrawingUtil.HandleTextureCaching();
 
-            //set the player's alkahestry energy each new day
-            TimeEvents.AfterDayStarted += TimeEvents_AfterDayStarted;
-
             //trying something completely different from a patched event hook...
             //gonna try using this to detect the night event heuristically.
             GameEvents.UpdateTick += GameEvents_UpdateTick;
 
             //slower, handles regen
-            GameEvents.OneSecondTick += GameEvents_OneSecondTick;
+            GameEvents.QuarterSecondTick += GameEvents_QuarterSecondTick;
 
             //wire up the PreRenderHUD event so I can display info bubbles when needed
             GraphicsEvents.OnPreRenderHudEvent += GraphicsEvents_OnPreRenderHudEvent;
+
+            //check for all professions mod: if it's here we run a wireup to give the player all skills professions at the right time (or after), when present.
+            CheckForAllProfessionsMod();
+
+            //location wireup to detect displacement from leylines for debug reasons
+            LocationEvents.CurrentLocationChanged += LocationEvents_CurrentLocationChanged;
 
             //check for experience bars mod: if it's here we draw hud elements for the new alchemy skill
             CheckForExperienceBarsMod();
             if (hasExperienceBarsMod)
             {
                 GraphicsEvents.OnPostRenderHudEvent += GraphicsEvents_OnPostRenderHudEvent;
-            }
-
-            //check for all professions mod: if it's here we run a wireup to give the player all skills professions at the right time (or after), when present.
-            CheckForAllProfessionsMod();
-            if (hasAllProfessionsMod)
-            {
-                LocationEvents.CurrentLocationChanged += LocationEvents_CurrentLocationChanged; ;
             }
 
             //add a debug option to give yourself experience
@@ -97,24 +94,30 @@ namespace EquivalentExchange
             checkForCooking();
         }
 
-        private static void GameEvents_OneSecondTick(object sender, EventArgs e)
+        private void LocationEvents_CurrentLocationChanged1(object sender, EventArgsCurrentLocationChanged e)
+        {
+            throw new NotImplementedException();
+        }
+
+        private static void GameEvents_QuarterSecondTick(object sender, EventArgs e)
         {
             if (!Context.IsWorldReady)
                 return;
 
-            RegenAlchemyBarBasedOnLeylineDistance();            
+            RegenerateAlchemyBarBasedOnLeylineDistance();            
         }
 
-        private static void RegenAlchemyBarBasedOnLeylineDistance()
-        {
+        private static void RegenerateAlchemyBarBasedOnLeylineDistance()
+        {            
+            //checking for paused or menuUp doesn't return true for some reason, but this is
+            //a reliable way to check to see if the player is in a menu to prevent regen.
+            if (Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu is GameMenu)
+                return;            
+
             double leylineDistance = Math.Min(10D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation));
-            double regenAlchemyBar = (10D - Math.Max(0, leylineDistance - instance.currentPlayerData.AlchemyLevel)) / 20D;
+            double regenAlchemyBar = Math.Min(10D - Math.Max(0, leylineDistance - instance.currentPlayerData.AlchemyLevel), 1D) / 10D;
+            regenAlchemyBar *= Alchemy.GetMaxAlkahestryEnergy() / 100D;
             instance.currentPlayerData.AlkahestryCurrentEnergy = (float)Math.Min(Alchemy.GetCurrentAlkahestryEnergy() + Math.Max(0.05D, regenAlchemyBar), Alchemy.GetMaxAlkahestryEnergy());
-        }
-
-        private void TimeEvents_AfterDayStarted(object sender, EventArgs e)
-        {
-            Alchemy.RestoreAlkahestryEnergyForNewDay();
         }
 
         //integration considerations for chase's skills
@@ -143,6 +146,7 @@ namespace EquivalentExchange
             hasCooking = true;
         }
 
+        //hooked to show the alchemy skill/bar/description/professions on the Skills Page
         private void DrawAfterGUI(object sender, EventArgs args)
         {
             if (Game1.activeClickableMenu is GameMenu)
@@ -204,6 +208,9 @@ namespace EquivalentExchange
             if (Game1.player.isEmoting && Game1.player.CurrentEmote == 24)
             {
                 //the player has just answered "yes" to sleep? or the player passed out like a chump.
+                //the new day hook seems to be inconsistent, so this is a full restore at the end of the night.
+                Alchemy.RestoreAlkahestryEnergyForNewDay();
+
                 if (Game1.currentLocation.lastQuestionKey == null || Game1.currentLocation.lastQuestionKey.Equals("Sleep"))
                     AddEndOfNightMenus();
             }
@@ -299,6 +306,8 @@ namespace EquivalentExchange
                     }
                 }
             }
+
+            Log.debug($"Leyline distance on map transition now {DistanceCalculator.GetPathDistance(Game1.player.currentLocation)}");
         }
 
         //hooked for drawing the experience bar on screen when experience bars mod is present.
@@ -369,6 +378,7 @@ namespace EquivalentExchange
             if (!Context.IsWorldReady)
                 return;
 
+            //one of these counts as true whenever the player is in the bus stop...
             if (Game1.eventUp)
                 return;            
 
@@ -403,7 +413,16 @@ namespace EquivalentExchange
                     float reboundChance = (float)Math.Round(Alchemy.GetReboundChance(false, false) * 100, 2);
                     int reboundDamage = Alchemy.GetReboundDamage(actualValue);
 
-                    int xPos = -15;
+                    //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
+                    int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
+
+                    //apply special constraints in the event of small-ish maps here
+                    bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
+
+                    //borders from the screen are viewport width / 2 - tileSizeWidth / 2
+                    int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
+
+                    int xPos = (isPlayerOutdoors ? viewportBorderWidth : 0) - 15;
                     int yPos = 0;// Game1.viewport.Height / 2 - 200;
                     int xSize = 240;
                     int ySize = 290 - (reboundChance > 0 ? 0 : 30);
@@ -438,12 +457,23 @@ namespace EquivalentExchange
                         Game1.spriteBatch.DrawString(Game1.smallFont, damage, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
                         dialogPositionMarkerY += rowSpacing;
                     }
-                } else if (heldItem is StardewValley.Tools.Axe || heldItem is StardewValley.Tools.Pickaxe)
+                } else if (heldItem is Axe || heldItem is Pickaxe)
                 {
-                    int xPos = -15;
+
+                    //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
+                    int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
+
+                    //apply special constraints in the event of small-ish maps here
+                    bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
+
+                    //borders from the screen are viewport width / 2 - tileSizeWidth / 2
+                    int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
+
+                    int xPos = (isPlayerOutdoors ? viewportBorderWidth : 0) - 15;
                     int yPos = 0;// Game1.viewport.Height / 2 - 200;
                     int xSize = 330;
                     int ySize = 260;
+
                     int dialogPositionMarkerX = xPos + 40;
                     int dialogPositionMarkerY = yPos + 100;
                     int rowSpacing = 30;
@@ -451,12 +481,123 @@ namespace EquivalentExchange
                     Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
 
 
-                    int level = (EquivalentExchange.instance.currentPlayerData.AlchemyLevel + 1);
+                    int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
                     List<string> toolTransmuteDescription = new List<string>();
                     toolTransmuteDescription.Add("Mouse over a weed");
-                    toolTransmuteDescription.Add($"{(heldItem is StardewValley.Tools.Axe ? "or stick" : "or stone")} and press");
+                    toolTransmuteDescription.Add($"{(heldItem is Axe ? "or stick" : "or stone")} and press");
                     toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} to break it.");
-                    toolTransmuteDescription.Add($"Breaks a {level}x{level} area.");
+                    toolTransmuteDescription.Add($"Breaks a {sideLength}x{sideLength} area.");
+
+                    foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
+                    {
+                        Game1.spriteBatch.DrawString(Game1.smallFont, toolTransmuteDescriptionLine, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
+                        dialogPositionMarkerY += rowSpacing;
+                    }
+                } else if (heldItem is MeleeWeapon && (heldItem as MeleeWeapon).name.ToLower().Contains("scythe")) {
+                    //stuff happens, no clue what
+
+                    //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
+                    int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
+
+                    //apply special constraints in the event of small-ish maps here
+                    bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
+
+                    //borders from the screen are viewport width / 2 - tileSizeWidth / 2
+                    int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
+
+                    int xPos = (isPlayerOutdoors ? viewportBorderWidth : 0) - 15;
+                    int yPos = 0;// Game1.viewport.Height / 2 - 200;
+                    int xSize = 330;
+                    int ySize = 260;
+
+                    int dialogPositionMarkerX = xPos + 40;
+                    int dialogPositionMarkerY = yPos + 100;
+                    int rowSpacing = 30;
+
+                    Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
+
+
+                    int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
+                    List<string> toolTransmuteDescription = new List<string>();
+                    toolTransmuteDescription.Add("Mouse over weeds");
+                    toolTransmuteDescription.Add($"or grass and press");
+                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} to mow it down.");
+                    toolTransmuteDescription.Add($"Cuts a {sideLength}x{sideLength} area.");
+
+                    foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
+                    {
+                        Game1.spriteBatch.DrawString(Game1.smallFont, toolTransmuteDescriptionLine, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
+                        dialogPositionMarkerY += rowSpacing;
+                    }
+                }
+                else if (heldItem is WateringCan)
+                {
+                    //stuff happens, no clue what
+
+                    //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
+                    int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
+
+                    //apply special constraints in the event of small-ish maps here
+                    bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
+
+                    //borders from the screen are viewport width / 2 - tileSizeWidth / 2
+                    int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
+
+                    int xPos = (isPlayerOutdoors ? viewportBorderWidth : 0) - 15;
+                    int yPos = 0;// Game1.viewport.Height / 2 - 200;
+                    int xSize = 330;
+                    int ySize = 230;
+
+                    int dialogPositionMarkerX = xPos + 40;
+                    int dialogPositionMarkerY = yPos + 100;
+                    int rowSpacing = 30;
+
+                    Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
+
+
+                    int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
+                    List<string> toolTransmuteDescription = new List<string>();
+                    toolTransmuteDescription.Add("Mouse over tilled soil");
+                    toolTransmuteDescription.Add($"and press {EquivalentExchange.instance.Config.TransmuteKey.ToString()} to");
+                    toolTransmuteDescription.Add($"water a {sideLength}x{sideLength} area.");
+
+                    foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
+                    {
+                        Game1.spriteBatch.DrawString(Game1.smallFont, toolTransmuteDescriptionLine, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
+                        dialogPositionMarkerY += rowSpacing;
+                    }
+                }
+                else if (heldItem is Hoe)
+                {
+                    //stuff happens, no clue what
+
+                    //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
+                    int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
+
+                    //apply special constraints in the event of small-ish maps here
+                    bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
+
+                    //borders from the screen are viewport width / 2 - tileSizeWidth / 2
+                    int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
+
+                    int xPos = (isPlayerOutdoors ? viewportBorderWidth : 0) - 15;
+                    int yPos = 0;// Game1.viewport.Height / 2 - 200;
+                    int xSize = 330;
+                    int ySize = 260;
+
+                    int dialogPositionMarkerX = xPos + 40;
+                    int dialogPositionMarkerY = yPos + 100;
+                    int rowSpacing = 30;
+
+                    Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
+
+
+                    int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
+                    List<string> toolTransmuteDescription = new List<string>();
+                    toolTransmuteDescription.Add("Mouse over soil");
+                    toolTransmuteDescription.Add($"or grass and press");
+                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} to till the soil");
+                    toolTransmuteDescription.Add($"or break a {sideLength}x{sideLength} area.");
 
                     foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
                     {
@@ -472,9 +613,21 @@ namespace EquivalentExchange
             int scale = 4;
             int alchemyBarWidth = DrawingUtil.alchemyBarSprite.Width * scale;
             int alchemyBarHeight = DrawingUtil.alchemyBarSprite.Height * scale;
-            int alchemyBarPositionX = Game1.viewport.Width - alchemyBarWidth - 120;
+
+            //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
+            int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
+
+            //apply special constraints in the event of small-ish maps here
+            bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
+
+            //borders from the screen are viewport width / 2 - tileSizeWidth / 2
+            int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
+
+            int alchemyBarPositionX = Game1.viewport.Width - (isPlayerOutdoors ? viewportBorderWidth : 0) - alchemyBarWidth - 120;
             int alchemyBarPositionY = Game1.viewport.Height - alchemyBarHeight - 16;
+            
             Vector2 alchemyBarPosition = new Vector2(alchemyBarPositionX, alchemyBarPositionY);
+
             Game1.spriteBatch.Draw(DrawingUtil.alchemyBarSprite, alchemyBarPosition, new Rectangle(0, 0, DrawingUtil.alchemyBarSprite.Width, DrawingUtil.alchemyBarSprite.Height), Color.White, 0, new Vector2(), scale, SpriteEffects.None, 1);
             if (Alchemy.GetCurrentAlkahestryEnergy() > 0)
             {
@@ -599,7 +752,15 @@ namespace EquivalentExchange
                         if (heldItem is StardewValley.Tool && keyPressed.ToString() == instance.Config.TransmuteKey)
                         {
                             Tool itemTool = heldItem as Tool;
-                            bool canDoToolAlchemy = itemTool is StardewValley.Tools.Axe || itemTool is StardewValley.Tools.Pickaxe;
+
+                            bool isScythe = itemTool is MeleeWeapon && itemTool.name.ToLower().Contains("scythe");
+                            bool isAxe = itemTool is Axe;
+                            bool isPickaxe = itemTool is Pickaxe;
+                            bool isHoe = itemTool is Hoe;
+                            bool isWateringCan = itemTool is WateringCan;
+
+                            bool canDoToolAlchemy = isScythe || isAxe || isPickaxe || isHoe || isWateringCan;
+                            
                             if (canDoToolAlchemy)
                             {
                                 Alchemy.HandleToolTransmute(itemTool);
@@ -672,39 +833,6 @@ namespace EquivalentExchange
 
         public void PopulateItemLibrary()
         {
-            //you can turn this off to cheat a bit
-            //if (Config.DisableRecipeItems)
-            //{
-            //    //the point of this routine is to find all of the objects that are created from a recipe. This mod will only transmute raw materials
-            //    //so anything that is cooked and crafted should not be possible to transmute. This is sort of for balance reasons? It's OP anyway.
-
-            //    //Now we're iterating over these two lists to obtain a list of IDs which are invalid for transmutation
-            //    Dictionary<string, string>[] recipeDictionaries = { CraftingRecipe.craftingRecipes, CraftingRecipe.cookingRecipes };
-            //    foreach (Dictionary<string, string> recipeDictionary in recipeDictionaries)
-            //    {
-            //        foreach (KeyValuePair<string, string> recipe in recipeDictionary)
-            //        {
-            //            //values are tokenized by a / and then subtokenized by spaces
-            //            string[] recipeValues = recipe.Value.Split('/');
-
-            //            //index 2 of this array is the output ID and amount, tokenized by spaces. Not all outputs have an amount, it defaults to 1.
-            //            //we don't care about quantity anyway.
-            //            string[] recipeOutputs = recipeValues[2].Split(' ');
-
-            //            //index 0 of this array is, thus, the output ID.
-            //            int.TryParse(recipeOutputs[0], out int recipeItemID);
-
-            //            Item recipeItem = new StardewValley.Object(recipeItemID, 1, true);
-
-            //            Log.debug("Blacklisted " + recipeItem.DisplayName + " due to recipe");
-
-            //            //add the recipe item ID to the list of items the player can't transmute
-            //            blackListedItemIDs.Add(recipeItemID);
-            //        }
-            //    }
-
-            //}
-
             //iterate over game objects
             foreach (KeyValuePair<int, string> entry in Game1.objectInformation)
             {

@@ -1,12 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using StardewValley;
-using EquivalentExchange;
 using Microsoft.Xna.Framework;
 using StardewValley.Tools;
+using StardewValley.TerrainFeatures;
+using System.Collections.Generic;
+//using xTile.ObjectModel;
+//using xTile.Dimensions;
 
 namespace EquivalentExchange
 {
@@ -15,7 +14,7 @@ namespace EquivalentExchange
         //constants for storing some important formula values as non-magic numbers, this is the impact level ups and other factors have on formulas, stored in constants for easy edits.
         //public const double TRANSMUTATION_BONUS_PER_LEVEL = 0.2D;
         //public const double LIQUIDATION_BONUS_PER_LEVEL = 0.02D;
-        public const double SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL = 0.075D;
+        public const double SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL = 0.08D;
         //public const double BASE_VALUE_COEFFICIENT = 0.8D;
         //public const double BASE_COST_COEFFICIENT = 3D;
         public const double LUCK_REBOUND_IMPACT = 0.01D;
@@ -27,6 +26,9 @@ namespace EquivalentExchange
         public const double MAX_DISTANCE_FACTOR = 10D;
         public const double MAP_DISTANCE_FACTOR = 0.05D;
         public const string LEYLINE_PROPERTY_INDICATOR = "AlchemyLeyline";
+
+        //the cost of executing a single action of a tool transmutation
+        public static int BASE_TOOL_TRANSMUTE_COST_PER_ACTION = 5;
 
 
         //old profession constants
@@ -69,23 +71,23 @@ namespace EquivalentExchange
         }
 
         //get the coefficient for stamina drain
-        public static double GetAlchemyStaminaCostSkillMultiplierForLevel(int level)
+        public static double GetAlchemyEnergyCostSkillMultiplierForLevel(int level)
         {
-            //base of 1 - 0.075 per skill level - profession modifiers
+            //base of 1 - 0.08 per skill level - profession modifiers
             return 1 - (level * SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL);
         }
 
         //get the coefficient for stamina drain
-        public static double GetAlchemyStaminaCostSkillMultiplier()
+        public static double GetAlchemyEnergyCostSkillMultiplier()
         {
             //base of 1 - 0.075 per skill level - profession modifiers
-            return GetAlchemyStaminaCostSkillMultiplierForLevel(EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
+            return GetAlchemyEnergyCostSkillMultiplierForLevel(EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
         }
 
         //algorithm to return stamina cost for the act of transmuting/liquidating an item, based on player skill and item value
         public static double GetStaminaCostForTransmutation(int itemValue)
         {
-            return Math.Sqrt(itemValue) * GetAlchemyStaminaCostSkillMultiplier();
+            return Math.Sqrt(itemValue) * GetAlchemyEnergyCostSkillMultiplier();
         }
 
         //get the coefficient for item sell value
@@ -116,10 +118,10 @@ namespace EquivalentExchange
             double distanceFactor = Math.Max(0D, distance - EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
 
             //normalize distance factor - each map adds roughly 5% rebound, so dividing by 20D is what we're going for.
-            distanceFactor /= (1 / MAP_DISTANCE_FACTOR);
+            distanceFactor *= MAP_DISTANCE_FACTOR;
 
             //calculate luck's impact on rebound
-            double luckFactor = (Game1.player.LuckLevel * LUCK_REBOUND_IMPACT) + Game1.dailyLuck;
+            double luckFactor = Math.Max(0, (Game1.player.LuckLevel * LUCK_REBOUND_IMPACT) + Game1.dailyLuck);
 
             return Math.Max(0, (BASE_REBOUND_RATE + distanceFactor) - luckFactor);
         }
@@ -127,7 +129,7 @@ namespace EquivalentExchange
         internal static double GetTransmutationMarkupPercentage(int whichLevel)
         {
             //base of 3.0 - 0.1 per skill level - profession modifiers
-            return 1.0D;
+            return 2.0D;
             //return BASE_COST_COEFFICIENT - (TRANSMUTATION_BONUS_PER_LEVEL * whichLevel);
         }
 
@@ -425,7 +427,7 @@ namespace EquivalentExchange
 
         internal static void RestoreAlkahestryEnergyForNewDay()
         {
-            EquivalentExchange.instance.currentPlayerData.AlkahestryCurrentEnergy = EquivalentExchange.instance.currentPlayerData.AlkahestryMaxEnergy;
+            EquivalentExchange.instance.currentPlayerData.AlkahestryCurrentEnergy = Alchemy.GetMaxAlkahestryEnergy();
         }
 
         public static void HandleNormalizeEvent(Item heldItem, int actualValue)
@@ -513,10 +515,17 @@ namespace EquivalentExchange
             Game1.player.Money += (int)Math.Floor(remainder);
         }
 
+        public static int GetToolTransmuteRadius()
+        {
+            if (EquivalentExchange.IsShiftKeyPressed())
+                return 0;
+            return (int)Math.Floor(EquivalentExchange.instance.currentPlayerData.AlchemyLevel / 3D);
+        }
+
         //this was almost entirely stolen from spacechase0 with very little contribution on my part.
         internal static void HandleToolTransmute(Tool tool)
         {
-            int alchemyLevel = (int)Math.Floor(Math.Round(EquivalentExchange.instance.currentPlayerData.AlchemyLevel / 3D));
+            int alchemyLevel = (EquivalentExchange.IsShiftKeyPressed() ? 0 : Alchemy.GetToolTransmuteRadius());
             int toolLevel = tool.UpgradeLevel;
 
             //set last user to dodge a null pointer
@@ -534,46 +543,96 @@ namespace EquivalentExchange
 
             bool performedAction = false;
 
+            //getting this out of the way, helps with easily determining tool types
+            bool isScythe = tool is MeleeWeapon && tool.name.ToLower().Contains("scythe");
+            bool isAxe = tool is StardewValley.Tools.Axe;
+            bool isPickaxe = tool is StardewValley.Tools.Pickaxe;
+            bool isHoe = tool is StardewValley.Tools.Hoe;
+            bool isWateringCan = tool is StardewValley.Tools.WateringCan;
+
             for (int xOffset = -alchemyLevel; xOffset <= alchemyLevel; xOffset++)
             {
                 for (int yOffset = -alchemyLevel; yOffset <= alchemyLevel; yOffset++)
                 {
-                    if (Alchemy.GetCurrentAlkahestryEnergy() + Game1.player.Stamina - 2F <= 0)
-                        return;
-                    
+                    if (!isScythe)
+                    {
+                        if (Alchemy.GetCurrentAlkahestryEnergy() + Game1.player.Stamina - 2F <= 0)
+                            return;
+                    }
+
                     Vector2 offsetPosition = new Vector2(xOffset + hitLocation.X, yOffset + hitLocation.Y);
 
                     if (currentPlayerLocation.objects.ContainsKey(offsetPosition))
                     {
-                        StardewValley.Object hitObject = currentPlayerLocation.objects[offsetPosition];
-                        if (hitObject.performToolAction(tool))
+                        if (isAxe || isScythe || isPickaxe || isHoe)
                         {
-                            if (tool is StardewValley.Tools.Axe)
+                            performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+                            if (performedAction && !isScythe)
                             {
-                                //stolen from spacechase0, I don't know what this means..
-                                if (hitObject.type == "Crafting" && hitObject.fragility != 2)
-                                {
-                                    //unclear what this does yet.
-                                    currentPlayerLocation.debris.Add(new Debris(hitObject.bigCraftable ? -hitObject.parentSheetIndex : hitObject.parentSheetIndex, offsetPosition, offsetPosition));
-                                }
-                                hitObject.performRemoveAction(offsetPosition, currentPlayerLocation);
-                                currentPlayerLocation.objects.Remove(offsetPosition);
-                                Alchemy.HandleStaminaDeduction(1, false);
-                                Alchemy.AddAlchemyExperience(1);
-                                Alchemy.IncreaseTotalTransmuteValue(1);
-                                SoundUtil.PlayMagickySound();
-                                performedAction = true;
-                            } else if(tool is StardewValley.Tools.Pickaxe)
+                                HandleToolTransmuteConsequence();
+                            }
+                        }
+                    }
+                    else if (currentPlayerLocation.terrainFeatures.ContainsKey(offsetPosition))
+                    {
+                        //a terrain feature, rather than a tool check, might respond to the tool
+                        TerrainFeature terrainFeature = currentPlayerLocation.terrainFeatures[offsetPosition];
+
+                        //don't break stumps unless the player is in precision mode.
+                        if (terrainFeature is Tree && isAxe && (!(terrainFeature as Tree).stump || EquivalentExchange.IsShiftKeyPressed()))
+                        {
+                            //trees get removed automatically
+                            performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+                            
+                            if (performedAction)
+                            {                            
+                                HandleToolTransmuteConsequence();
+                            }
+                        }
+                        else if (terrainFeature is Grass && currentPlayerLocation is Farm && isScythe)
+                        {
+                            int oldHay = (currentPlayerLocation as Farm).piecesOfHay;
+                            if (terrainFeature.performToolAction(tool, 0, offsetPosition))
                             {
-                                var oldStamina = Game1.player.stamina;
-                                tool.DoFunction(currentPlayerLocation, (int)offsetPosition.X * Game1.tileSize, (int)offsetPosition.Y * Game1.tileSize, 0, Game1.player);
-                                //restore stamina prior to pickaxe function
-                                Game1.player.stamina = oldStamina;
-                                Alchemy.HandleStaminaDeduction(1, false);
-                                Alchemy.AddAlchemyExperience(1);
-                                Alchemy.IncreaseTotalTransmuteValue(1);
+                                currentPlayerLocation.terrainFeatures.Remove(offsetPosition);
+                                //HandleToolTransmuteConsequence(); Scythe transmute is special and doesn't cost anything, but you don't get experience.
                                 performedAction = true;
                             }
+
+                            //hay get! spawn the sprite animation for acquisition of hay
+                            if (oldHay < (currentPlayerLocation as Farm).piecesOfHay)
+                            {
+                                SpawnHayAnimationSprite(currentPlayerLocation, offsetPosition, Game1.player);
+                            }
+                        }
+                        else if (terrainFeature is HoeDirt && isWateringCan && (tool as WateringCan).WaterLeft > 0)
+                        {
+                            //state of 0 is unwatered.
+                            if ((terrainFeature as HoeDirt).state != 1) {
+                                terrainFeature.performToolAction(tool, 0, offsetPosition);
+                                (tool as WateringCan).WaterLeft = (tool as WateringCan).WaterLeft - 1;
+                                SpawnWateringCanAnimationSprite(currentPlayerLocation, offsetPosition);
+                                HandleToolTransmuteConsequence();
+                                performedAction = true;
+                            }
+                        }
+                        else if (isPickaxe && terrainFeature is HoeDirt)
+                        {
+                            performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+
+                            if (performedAction)
+                            {
+                                HandleToolTransmuteConsequence();
+                            }
+                        }
+                    }
+                    else if (isHoe)
+                    {
+                        performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+
+                        if (performedAction)
+                        {
+                            HandleToolTransmuteConsequence();
                         }
                     }
                 }
@@ -584,5 +643,311 @@ namespace EquivalentExchange
                 SoundUtil.PlayMagickySound();
             }
         }
+
+        private static void SpawnWateringCanAnimationSprite(GameLocation currentPlayerLocation, Vector2 offsetPosition)
+        {
+            currentPlayerLocation.temporarySprites.Add(new TemporaryAnimatedSprite(13, new Vector2(offsetPosition.X * (float)Game1.tileSize, offsetPosition.Y * (float)Game1.tileSize), Color.White, 10, Game1.random.NextDouble() < 0.5, 70f, 0, Game1.tileSize, (float)(((double)offsetPosition.Y * (double)Game1.tileSize + (double)(Game1.tileSize / 2)) / 10000.0 - 0.00999999977648258), -1, 0));
+        }
+
+        private static void SpawnHayAnimationSprite(GameLocation currentPlayerLocation, Vector2 offsetPosition, StardewValley.Farmer player)
+        {
+            currentPlayerLocation.temporarySprites.Add(new TemporaryAnimatedSprite(28, offsetPosition * (float)Game1.tileSize + new Vector2((float)Game1.random.Next(-Game1.pixelZoom * 4, Game1.pixelZoom * 4), (float)Game1.random.Next(-Game1.pixelZoom * 4, Game1.pixelZoom * 4)), Color.Green, 8, Game1.random.NextDouble() < 0.5, (float)Game1.random.Next(60, 100), 0, -1, -1f, -1, 0));
+            currentPlayerLocation.temporarySprites.Add(new TemporaryAnimatedSprite(Game1.objectSpriteSheet, Game1.getSourceRectForStandardTileSheet(Game1.objectSpriteSheet, 178, 16, 16), 750f, 1, 0, player.position - new Vector2(0.0f, (float)(Game1.tileSize * 2)), false, false, player.position.Y / 10000f, 0.005f, Color.White, (float)Game1.pixelZoom, -0.005f, 0.0f, 0.0f, false)
+            {
+                motion = { Y = -1f },
+                layerDepth = (float)(1.0 - (double)Game1.random.Next(100) / 10000.0),
+                delayBeforeAnimationStart = Game1.random.Next(350)
+            });
+        }
+
+        private static void HandleToolTransmuteConsequence()
+        {            
+            Alchemy.HandleStaminaDeduction(BASE_TOOL_TRANSMUTE_COST_PER_ACTION * GetAlchemyEnergyCostSkillMultiplier(), false);
+            Alchemy.AddAlchemyExperience(BASE_TOOL_TRANSMUTE_COST_PER_ACTION);
+            Alchemy.IncreaseTotalTransmuteValue(BASE_TOOL_TRANSMUTE_COST_PER_ACTION);
+        }
+
+        //static boulder status var for tracking boulders to mash (vector and times struck);
+        private static Dictionary<Vector2, int> BouldersStruck = new Dictionary<Vector2, int>();
+
+        private static bool DoToolFunction(GameLocation location, StardewValley.Farmer who, Tool tool, int x, int y)
+        {
+            bool performedAction = false;
+            Vector2 index = new Vector2(x, y);
+            Vector2 vector2 = new Vector2((float)(x + 0.5), (float)(y + 0.5));
+            if (tool is MeleeWeapon && tool.name.ToLower().Contains("scythe"))
+            {
+                if (location.objects[index] != null)
+                {
+                    StardewValley.Object hitObject = location.objects[index];
+                    if (hitObject.name.Contains("Weed") && hitObject.performToolAction(tool))
+                    {
+                        if (hitObject.type == "Crafting" && hitObject.fragility != 2)
+                        {
+                            location.debris.Add(new Debris(hitObject.bigCraftable ? -hitObject.parentSheetIndex : hitObject.parentSheetIndex, index, index));
+                        }
+                        hitObject.performRemoveAction(index, location);
+                        location.objects.Remove(index);
+                        performedAction = true;
+                    }
+                }
+                else if (location.terrainFeatures.ContainsKey(index) && location.terrainFeatures[index].performToolAction(tool, 0, index, (GameLocation)null))
+                {
+                    location.terrainFeatures.Remove(index);
+                    performedAction = true;
+                }
+            }
+            else if (tool is Axe)
+            {
+                Rectangle rectangle = new Rectangle(x * Game1.tileSize, y * Game1.tileSize, Game1.tileSize, Game1.tileSize);                
+                location.performToolAction(tool, x, y);
+                if (location.terrainFeatures.ContainsKey(index) && location.terrainFeatures[index].performToolAction(tool, 0, index, (GameLocation)null))
+                {
+                    location.terrainFeatures.Remove(index);
+                    performedAction = true;
+                }
+                Rectangle boundingBox;
+                if (location.largeTerrainFeatures != null)
+                {
+                    for (int index2 = location.largeTerrainFeatures.Count - 1; index2 >= 0; --index2)
+                    {
+                        boundingBox = location.largeTerrainFeatures[index2].getBoundingBox();
+                        if (boundingBox.Intersects(rectangle) && location.largeTerrainFeatures[index2].performToolAction(tool, 0, index, (GameLocation)null))
+                        {
+                            location.largeTerrainFeatures.RemoveAt(index2);
+                        }
+                    }
+                }
+                if (location.terrainFeatures.ContainsKey(index) && location.terrainFeatures[index] is Tree)
+                {
+                    if (!(location.terrainFeatures[index] as Tree).stump || EquivalentExchange.IsShiftKeyPressed())
+                        performedAction = true;
+                }
+                if (!location.Objects.ContainsKey(index) || location.Objects[index].Type == null || !location.Objects[index].performToolAction(tool))
+                    return performedAction;
+                if (location.Objects[index].type.Equals("Crafting") && location.Objects[index].fragility != 2)
+                {
+                    List<Debris> debris1 = location.debris;
+                    int objectIndex = location.Objects[index].bigCraftable ? -location.Objects[index].ParentSheetIndex : location.Objects[index].ParentSheetIndex;
+                    Vector2 toolLocation = who.GetToolLocation(false);
+                    boundingBox = who.GetBoundingBox();
+                    double x1 = (double)boundingBox.Center.X;
+                    boundingBox = who.GetBoundingBox();
+                    double y1 = (double)boundingBox.Center.Y;
+                    Vector2 playerPosition = new Vector2((float)x1, (float)y1);
+                    Debris debris2 = new Debris(objectIndex, toolLocation, playerPosition);
+                    debris1.Add(debris2);
+                }
+                location.Objects[index].performRemoveAction(index, location);
+                location.Objects.Remove(index);
+                performedAction = true;
+            }
+            else if (tool is Pickaxe)
+            {
+                int power = who.toolPower;
+                if (location.performToolAction(tool, x, y))
+                    return true;
+                StardewValley.Object objectHit = (StardewValley.Object)null;
+                location.Objects.TryGetValue(index, out objectHit);
+                if (objectHit == null)
+                {
+                    if (location.terrainFeatures.ContainsKey(index) && location.terrainFeatures[index].performToolAction(tool, 0, index, (GameLocation)null))
+                    {
+                        location.terrainFeatures.Remove(index);
+                        performedAction = true;
+                    }
+                }
+
+                if (objectHit != null)
+                {
+                    if (objectHit.Name.Equals("Stone"))
+                    {
+                        Game1.playSound("hammer");
+                        if (objectHit.minutesUntilReady > 0)
+                        {
+                            int num3 = Math.Max(1, tool.upgradeLevel + 1);
+                            objectHit.minutesUntilReady -= num3;
+                            objectHit.shakeTimer = 200;
+                            if (objectHit.minutesUntilReady > 0)
+                            {
+                                Game1.createRadialDebris(Game1.currentLocation, 14, x, y, Game1.random.Next(2, 5), false, -1, false, -1);
+                                return performedAction;
+                            }
+                        }
+                        if (objectHit.ParentSheetIndex < 200 && !Game1.objectInformation.ContainsKey(objectHit.ParentSheetIndex + 1))
+                            location.TemporarySprites.Add(new TemporaryAnimatedSprite(objectHit.ParentSheetIndex + 1, 300f, 1, 2, new Vector2((float)(x - x % Game1.tileSize), (float)(y - y % Game1.tileSize)), true, objectHit.flipped)
+                            {
+                                alphaFade = 0.01f
+                            });
+                        else
+                            location.TemporarySprites.Add(new TemporaryAnimatedSprite(47, new Vector2((float)(x * Game1.tileSize), (float)(y * Game1.tileSize)), Color.Gray, 10, false, 80f, 0, -1, -1f, -1, 0));
+                        Game1.createRadialDebris(location, 14, x, y, Game1.random.Next(2, 5), false, -1, false, -1);
+                        location.TemporarySprites.Add(new TemporaryAnimatedSprite(46, new Vector2((float)(x * Game1.tileSize), (float)(y * Game1.tileSize)), Color.White, 10, false, 80f, 0, -1, -1f, -1, 0)
+                        {
+                            motion = new Vector2(0.0f, -0.6f),
+                            acceleration = new Vector2(0.0f, 1f / 500f),
+                            alphaFade = 0.015f
+                        });
+                        if (!location.Name.Equals("UndergroundMine"))
+                        {
+                            if (objectHit.parentSheetIndex == 343 || objectHit.parentSheetIndex == 450)
+                            {
+                                Random random = new Random((int)Game1.stats.DaysPlayed + (int)Game1.uniqueIDForThisGame / 2 + x * 2000 + y);
+                                if (random.NextDouble() < 0.035 && Game1.stats.DaysPlayed > 1U)
+                                    Game1.createObjectDebris(535 + (Game1.stats.DaysPlayed <= 60U || random.NextDouble() >= 0.2 ? (Game1.stats.DaysPlayed <= 120U || random.NextDouble() >= 0.2 ? 0 : 2) : 1), x, y, tool.getLastFarmerToUse().uniqueMultiplayerID);
+                                if (random.NextDouble() < 0.035 * (who.professions.Contains(21) ? 2.0 : 1.0) && Game1.stats.DaysPlayed > 1U)
+                                    Game1.createObjectDebris(382, x, y, tool.getLastFarmerToUse().uniqueMultiplayerID);
+                                if (random.NextDouble() < 0.01 && Game1.stats.DaysPlayed > 1U)
+                                    Game1.createObjectDebris(390, x, y, tool.getLastFarmerToUse().uniqueMultiplayerID);
+                            }
+                            location.breakStone(objectHit.parentSheetIndex, x, y, who, new Random((int)Game1.stats.DaysPlayed + (int)Game1.uniqueIDForThisGame / 2 + x * 4000 + y));
+                        }
+                        else
+                            Game1.mine.checkStoneForItems(objectHit.ParentSheetIndex, x, y, who);
+                        if (objectHit.minutesUntilReady > 0)
+                            return performedAction;
+                        location.Objects.Remove(index);
+                        Game1.playSound("stoneCrack");
+                        performedAction = true;
+                    }
+                    else if (objectHit.Name.Contains("Boulder"))
+                    {
+                        if (tool.UpgradeLevel > 1)
+                        {
+                            Vector2 boulderVector = objectHit.tileLocation;
+                            if (Alchemy.BouldersStruck.ContainsKey(boulderVector))
+                            {
+                                Alchemy.BouldersStruck[boulderVector] += (power + 1);
+                                if (Alchemy.BouldersStruck[boulderVector] < 4)
+                                {
+                                    performedAction = true;
+                                    return performedAction;
+                                }
+                            }
+                            else
+                            {
+                                Alchemy.BouldersStruck.Add(boulderVector, 0);
+                                performedAction = true;
+                                return performedAction;
+                            }
+                            location.removeObject(index, false);
+                            location.temporarySprites.Add(new TemporaryAnimatedSprite(5, new Vector2((float)Game1.tileSize * index.X - (float)(Game1.tileSize / 2), (float)Game1.tileSize * (index.Y - 1f)), Color.Gray, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, -1, 0)
+                            {
+                                delayBeforeAnimationStart = 0
+                            });
+                            location.temporarySprites.Add(new TemporaryAnimatedSprite(5, new Vector2((float)Game1.tileSize * index.X + (float)(Game1.tileSize / 2), (float)Game1.tileSize * (index.Y - 1f)), Color.Gray, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, -1, 0)
+                            {
+                                delayBeforeAnimationStart = 200
+                            });
+                            location.temporarySprites.Add(new TemporaryAnimatedSprite(5, new Vector2((float)Game1.tileSize * index.X, (float)Game1.tileSize * (index.Y - 1f) - (float)(Game1.tileSize / 2)), Color.Gray, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, -1, 0)
+                            {
+                                delayBeforeAnimationStart = 400
+                            });
+                            location.temporarySprites.Add(new TemporaryAnimatedSprite(5, new Vector2((float)Game1.tileSize * index.X, (float)Game1.tileSize * index.Y - (float)(Game1.tileSize / 2)), Color.Gray, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, -1, 0)
+                            {
+                                delayBeforeAnimationStart = 600
+                            });
+                            location.temporarySprites.Add(new TemporaryAnimatedSprite(25, new Vector2((float)Game1.tileSize * index.X, (float)Game1.tileSize * index.Y), Color.White, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, Game1.tileSize * 2, 0));
+                            location.temporarySprites.Add(new TemporaryAnimatedSprite(25, new Vector2((float)Game1.tileSize * index.X + (float)(Game1.tileSize / 2), (float)Game1.tileSize * index.Y), Color.White, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, Game1.tileSize * 2, 0)
+                            {
+                                delayBeforeAnimationStart = 250
+                            });
+                            location.temporarySprites.Add(new TemporaryAnimatedSprite(25, new Vector2((float)Game1.tileSize * index.X - (float)(Game1.tileSize / 2), (float)Game1.tileSize * index.Y), Color.White, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, Game1.tileSize * 2, 0)
+                            {
+                                delayBeforeAnimationStart = 500
+                            });
+                            performedAction = true;
+                        }
+                    }
+                    else
+                    {
+                        if (!objectHit.performToolAction(tool))
+                        {                            
+                            return performedAction;
+                        }
+                        objectHit.performRemoveAction(index, location);
+                        if (objectHit.type.Equals("Crafting") && objectHit.fragility != 2)
+                        {
+                            List<Debris> debris1 = Game1.currentLocation.debris;
+                            int objectIndex = objectHit.bigCraftable ? -objectHit.ParentSheetIndex : objectHit.ParentSheetIndex;
+                            Vector2 toolLocation = who.GetToolLocation(false);
+                            Rectangle boundingBox = who.GetBoundingBox();
+                            double x1 = (double)boundingBox.Center.X;
+                            boundingBox = who.GetBoundingBox();
+                            double y1 = (double)boundingBox.Center.Y;
+                            Vector2 playerPosition = new Vector2((float)x1, (float)y1);
+                            Debris debris2 = new Debris(objectIndex, toolLocation, playerPosition);
+                            debris1.Add(debris2);
+                        }
+                        Game1.currentLocation.Objects.Remove(index);
+                        performedAction = true;
+                    }
+                }
+                else
+                {
+                    Game1.playSound("woodyHit");
+                    if (location.doesTileHaveProperty(x, y, "Diggable", "Back") == null)
+                        return false;
+                    location.TemporarySprites.Add(new TemporaryAnimatedSprite(12, new Vector2((float)(x * Game1.tileSize), (float)(y * Game1.tileSize)), Color.White, 8, false, 80f, 0, -1, -1f, -1, 0)
+                    {
+                        alphaFade = 0.015f
+                    });
+                }
+            }
+            else if (tool is Hoe)
+            {
+                if (location.terrainFeatures.ContainsKey(index))
+                {
+                    if (location.terrainFeatures[index].performToolAction(tool, 0, index, (GameLocation)null))
+                    {
+                        location.terrainFeatures.Remove(index);
+                        performedAction = true;
+                    }
+                }
+                else
+                {
+                    if (location.objects.ContainsKey(index) && location.Objects[index].performToolAction(tool))
+                    {
+                        if (location.Objects[index].type.Equals("Crafting") && location.Objects[index].fragility != 2)
+                        {
+                            List<Debris> debris1 = location.debris;
+                            int objectIndex = location.Objects[index].bigCraftable ? -location.Objects[index].ParentSheetIndex : location.Objects[index].ParentSheetIndex;
+                            Vector2 toolLocation = who.GetToolLocation(false);
+                            Microsoft.Xna.Framework.Rectangle boundingBox = who.GetBoundingBox();
+                            double x1 = (double)boundingBox.Center.X;
+                            boundingBox = who.GetBoundingBox();
+                            double y1 = (double)boundingBox.Center.Y;
+                            Vector2 playerPosition = new Vector2((float)x1, (float)y1);
+                            Debris debris2 = new Debris(objectIndex, toolLocation, playerPosition);
+                            debris1.Add(debris2);
+                        }
+                        location.Objects[index].performRemoveAction(index, location);
+                        location.Objects.Remove(index);
+                        performedAction = true;
+                    }
+                    if (location.doesTileHaveProperty((int)index.X, (int)index.Y, "Diggable", "Back") != null)
+                    {
+                        if (location.Name.Equals("UndergroundMine") && !location.isTileOccupied(index, ""))
+                        {
+                            location.terrainFeatures.Add(index, (TerrainFeature)new HoeDirt());
+                            performedAction = true;
+                            Game1.removeSquareDebrisFromTile((int)index.X, (int)index.Y);
+                            location.checkForBuriedItem((int)index.X, (int)index.Y, false, false);
+                            location.temporarySprites.Add(new TemporaryAnimatedSprite(12, new Vector2(vector2.X * (float)Game1.tileSize, vector2.Y * (float)Game1.tileSize), Color.White, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, -1, 0));
+                        }
+                        else if (!location.isTileOccupied(index, "") && location.isTilePassable(new xTile.Dimensions.Location((int)index.X, (int)index.Y), Game1.viewport))
+                        {
+                            location.makeHoeDirt(index);
+                            performedAction = true;
+                            Game1.removeSquareDebrisFromTile((int)index.X, (int)index.Y);
+                            location.temporarySprites.Add(new TemporaryAnimatedSprite(12, new Vector2(index.X * (float)Game1.tileSize, index.Y * (float)Game1.tileSize), Color.White, 8, Game1.random.NextDouble() < 0.5, 50f, 0, -1, -1f, -1, 0));
+                            location.checkForBuriedItem((int)index.X, (int)index.Y, false, false);
+                        }
+                    }
+                }
+            }
+            return performedAction;
+        }
     }
 }
+

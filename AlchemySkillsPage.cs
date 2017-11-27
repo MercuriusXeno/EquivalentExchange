@@ -78,18 +78,19 @@ namespace EquivalentExchange
             if (this.skillBars.Count > 1 && this.skillBars.Last<ClickableTextureComponent>().myID >= 200 && this.skillBars[this.skillBars.Count - 2].myID >= 200)
                 this.skillBars.Last<ClickableTextureComponent>().upNeighborID = this.skillBars[this.skillBars.Count - 2].myID;
            
-            string hoverText = "";
-            List<ClickableTextureComponent> skillAreas = this.skillAreas;
-            ClickableTextureComponent textureComponent = new ClickableTextureComponent("Alchemy", new Rectangle(xStart - Game1.tileSize * 2 - Game1.tileSize * 3 / 4, yStart + skillOrderIndex * (Game1.tileSize / 2 + Game1.pixelZoom * 6), Game1.tileSize * 2 + Game1.pixelZoom * 5, 9 * Game1.pixelZoom), string.Concat((object)skillOrderIndex), hoverText, (Texture2D)null, Rectangle.Empty, 1f, false);
-            int num2 = skillOrderIndex;
-            textureComponent.myID = num2;
-            int num3 = skillOrderIndex < 4 ? skillOrderIndex + 1 : 10201;
-            textureComponent.downNeighborID = num3;
-            int num4 = skillOrderIndex > 0 ? skillOrderIndex - 1 : 12341;
-            textureComponent.upNeighborID = num4;
-            int num9 = 100 + skillOrderIndex;
-            textureComponent.rightNeighborID = num9;
-            skillAreas.Add(textureComponent);
+            //dead code for vanilla hover over, we can just write a custom one.
+            //string hoverText = "";
+            //List<ClickableTextureComponent> skillAreas = this.skillAreas;
+            //ClickableTextureComponent textureComponent = new ClickableTextureComponent("Alchemy", new Rectangle(xStart - Game1.tileSize * 2 - Game1.tileSize * 3 / 4, yStart + skillOrderIndex * (Game1.tileSize / 2 + Game1.pixelZoom * 6), Game1.tileSize * 2 + Game1.pixelZoom * 5, 9 * Game1.pixelZoom), string.Concat((object)skillOrderIndex), hoverText, (Texture2D)null, Rectangle.Empty, 1f, false);
+            //int num2 = skillOrderIndex;
+            //textureComponent.myID = num2;
+            //int num3 = skillOrderIndex < 4 ? skillOrderIndex + 1 : 10201;
+            //textureComponent.downNeighborID = num3;
+            //int num4 = skillOrderIndex > 0 ? skillOrderIndex - 1 : 12341;
+            //textureComponent.upNeighborID = num4;
+            //int num9 = 100 + skillOrderIndex;
+            //textureComponent.rightNeighborID = num9;
+            //skillAreas.Add(textureComponent);
             
         }
 
@@ -122,6 +123,8 @@ namespace EquivalentExchange
         {
         }
 
+        //called by the renderer during draw to simulate the vanilla perform hover method
+        //needed for profession hover over description/icon as well as skill bonus descriptions.
         public override void performHoverAction(int x, int y)
         {
             this.hoverText = "";
