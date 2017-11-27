@@ -982,13 +982,12 @@ namespace EquivalentExchange
                 if (location.Objects[index].type.Equals("Crafting") && location.Objects[index].fragility != 2)
                 {
                     List<Debris> debris1 = location.debris;
-                    int objectIndex = location.Objects[index].bigCraftable ? -location.Objects[index].ParentSheetIndex : location.Objects[index].ParentSheetIndex;
-                    Vector2 toolLocation = who.GetToolLocation(false);
+                    int objectIndex = location.Objects[index].bigCraftable ? -location.Objects[index].ParentSheetIndex : location.Objects[index].ParentSheetIndex;                    
                     boundingBox = who.GetBoundingBox();
                     double x1 = (double)boundingBox.Center.X;
                     boundingBox = who.GetBoundingBox();
                     double y1 = (double)boundingBox.Center.Y;
-                    Debris debris2 = new Debris(objectIndex, toolLocation, index);
+                    Debris debris2 = new Debris(objectIndex, index, index);
                     debris1.Add(debris2);
                 }
                 location.Objects[index].performRemoveAction(index, location);
@@ -1030,7 +1029,7 @@ namespace EquivalentExchange
                             }
                         }
                         if (objectHit.ParentSheetIndex < 200 && !Game1.objectInformation.ContainsKey(objectHit.ParentSheetIndex + 1))
-                            location.TemporarySprites.Add(new TemporaryAnimatedSprite(objectHit.ParentSheetIndex + 1, 300f, 1, 2, new Vector2((float)(x - x % Game1.tileSize), (float)(y - y % Game1.tileSize)), true, objectHit.flipped)
+                            location.TemporarySprites.Add(new TemporaryAnimatedSprite(objectHit.ParentSheetIndex + 1, 300f, 1, 2, new Vector2((float)(x) * Game1.tileSize, (float)(y) * Game1.tileSize), true, objectHit.flipped)
                             {
                                 alphaFade = 0.01f
                             });
