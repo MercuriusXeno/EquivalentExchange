@@ -918,9 +918,6 @@ namespace EquivalentExchange
             Alchemy.IncreaseTotalTransmuteValue(BASE_TOOL_TRANSMUTE_COST_PER_ACTION);
         }
 
-        //static boulder status var for tracking boulders to mash (vector and times struck);
-        private static Dictionary<Vector2, int> BouldersStruck = new Dictionary<Vector2, int>();
-
         private static bool DoToolFunction(GameLocation location, StardewValley.Farmer who, Tool tool, int x, int y)
         {
             bool performedAction = false;
@@ -955,7 +952,7 @@ namespace EquivalentExchange
                 var snapshotPlayerExperience = Game1.player.experiencePoints;
                 Rectangle rectangle = new Rectangle(x * Game1.tileSize, y * Game1.tileSize, Game1.tileSize, Game1.tileSize);                
                 location.performToolAction(tool, x, y);
-                if (location.terrainFeatures.ContainsKey(index) && location.terrainFeatures[index].performToolAction(tool, 0, index, (GameLocation)null))
+                if (location.terrainFeatures.ContainsKey(index) && location.terrainFeatures[index] is Tree && PerformTreeTerrainFeatureToolAction(tool, 0, index, location.terrainFeatures[index] as Tree, (GameLocation)null))
                 {
                     location.terrainFeatures.Remove(index);
                     performedAction = true;
@@ -983,10 +980,6 @@ namespace EquivalentExchange
                 {
                     List<Debris> debris1 = location.debris;
                     int objectIndex = location.Objects[index].bigCraftable ? -location.Objects[index].ParentSheetIndex : location.Objects[index].ParentSheetIndex;                    
-                    boundingBox = who.GetBoundingBox();
-                    double x1 = (double)boundingBox.Center.X;
-                    boundingBox = who.GetBoundingBox();
-                    double y1 = (double)boundingBox.Center.Y;
                     Debris debris2 = new Debris(objectIndex, index, index);
                     debris1.Add(debris2);
                 }
@@ -1155,6 +1148,244 @@ namespace EquivalentExchange
                 RestorePlayerExperience(snapshotPlayerExperience);
             }
             return performedAction;
+        }
+
+        //tree terrain feature perform action
+        //because it's full of dumb nonsense that makes stupid decisions, this is full of reflection and terrible
+        public static bool PerformTreeTerrainFeatureToolAction(Tool t, int explosion, Vector2 tileLocation, Tree tf, GameLocation location = null)
+        {
+            if (location == null)
+                location = Game1.currentLocation;
+            if (explosion > 0)
+                tf.tapped = false;
+            if (tf.tapped)
+                return false;
+            Console.WriteLine("TREE: IsClient:" + Game1.IsClient.ToString() + " randomOutput: " + (object)Game1.recentMultiplayerRandom.Next(9999));
+            if ((double)tf.health <= -99.0)
+                return false;
+            if (tf.growthStage >= 5)
+            {
+                if (t != null && t is Axe)
+                {
+                    Game1.playSound("axchop");
+                    //yet another bad debris call
+                    Vector2 debrisVector = new Vector2(tileLocation.X * Game1.tileSize + (Game1.tileSize / 2), tileLocation.Y * Game1.tileSize + (Game1.tileSize / 2));
+                    location.debris.Add(new Debris(12, Game1.random.Next(1, 3), debrisVector, tileLocation, 0, -1));
+
+                    //set last user hit via reflection
+                    var treePlayerToHitReflectorField = tf.GetType().GetField("lastPlayerToHit", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    treePlayerToHitReflectorField.SetValue(tf, t.getLastFarmerToUse().uniqueMultiplayerID);
+                }
+                else if (explosion <= 0)
+                    return false;
+                //shake via reflection
+                typeof(Tree).GetMethod("shake", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(tf, new object[] { tileLocation, true });
+                        
+                float num = 1f;
+                if (explosion > 0)
+                {
+                    num = (float)explosion;
+                }
+                else
+                {
+                    if (t == null)
+                        return false;
+                    switch (t.upgradeLevel)
+                    {
+                        case 0:
+                            num = 1f;
+                            break;
+                        case 1:
+                            num = 1.25f;
+                            break;
+                        case 2:
+                            num = 1.67f;
+                            break;
+                        case 3:
+                            num = 2.5f;
+                            break;
+                        case 4:
+                            num = 5f;
+                            break;
+                    }
+                }
+                tf.health = tf.health - num;
+                if ((double)tf.health <= 0.0)
+                {
+                    if (!tf.stump)
+                    {
+                        if ((t != null || explosion > 0) && location.Equals((object)Game1.currentLocation))
+                            Game1.playSound("treecrack");
+                        tf.stump = true;
+                        tf.health = 5f;
+                        //set tree falling via reflection
+                        var treeFallingFieldReflector = tf.GetType().GetField("falling", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        treeFallingFieldReflector.SetValue(tf, true);
+
+                        //this gets reset...
+                        if (t != null)
+                            t.getLastFarmerToUse().gainExperience(2, 12);
+
+                        //set tree shake left via reflection
+                        var shakeLeft = t == null || t.getLastFarmerToUse() == null || ((double)t.getLastFarmerToUse().getTileLocation().X > (double)tileLocation.X || (double)t.getLastFarmerToUse().getTileLocation().Y < (double)tileLocation.Y && (double)tileLocation.X % 2.0 == 0.0);                    
+                        var treeShakeLeftFieldReflector = tf.GetType().GetField("shakeLeft", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                        treeFallingFieldReflector.SetValue(tf, shakeLeft);
+                    }
+                    else
+                    {
+                        tf.health = -100f;
+                        Game1.createRadialDebris(location, 12, (int)tileLocation.X, (int)tileLocation.Y, Game1.random.Next(30, 40), false, -1, false, -1);
+                        int index = tf.treeType != 7 || (double)tileLocation.X % 7.0 != 0.0 ? (tf.treeType == 7 ? 420 : 92) : 422;
+                        if (Game1.IsMultiplayer)
+                        {
+                            Game1.recentMultiplayerRandom = new Random((int)tileLocation.X * 2000 + (int)tileLocation.Y);
+                            Random multiplayerRandom = Game1.recentMultiplayerRandom;
+                        }
+                        else
+                        {
+                            Random random = new Random((int)Game1.uniqueIDForThisGame + (int)Game1.stats.DaysPlayed + (int)tileLocation.X * 7 + (int)tileLocation.Y * 11);
+                        }
+                        if (t == null || t.getLastFarmerToUse() == null)
+                        {
+                            if (location.Equals((object)Game1.currentLocation))
+                            {
+                                Game1.createMultipleObjectDebris(92, (int)tileLocation.X, (int)tileLocation.Y, 2);
+                            }
+                            else
+                            {
+                                Game1.createItemDebris((Item)new StardewValley.Object(92, 1, false, -1, 0), tileLocation * (float)Game1.tileSize, 2, location);
+                                Game1.createItemDebris((Item)new StardewValley.Object(92, 1, false, -1, 0), tileLocation * (float)Game1.tileSize, 2, location);
+                            }
+                        }
+                        else if (Game1.IsMultiplayer)
+                        {
+                            long lastPlayerToHit = (long)tf.GetType().GetField("lastPlayerToHit", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(tf);
+                            Game1.createMultipleObjectDebris(index, (int)tileLocation.X, (int)tileLocation.Y, 1, lastPlayerToHit);
+                            if (tf.treeType != 7)
+                                Game1.createRadialDebris(location, 12, (int)tileLocation.X, (int)tileLocation.Y, 4, true, -1, false, -1);
+                        }
+                        else
+                        {
+                            if (tf.treeType != 7)
+                            {
+                                //extra wood calculation via reflection
+                                int extraWoodCalculator = (int)typeof(Tree).GetMethod("extraWoodCalculator", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(tf, new object[] { tileLocation });
+                                Game1.createRadialDebris(location, 12, (int)tileLocation.X, (int)tileLocation.Y, 5 + extraWoodCalculator, true, -1, false, -1);
+                            }
+                            Game1.createMultipleObjectDebris(index, (int)tileLocation.X, (int)tileLocation.Y, 1);
+                        }
+                        if (location.Equals((object)Game1.currentLocation))
+                            Game1.playSound("treethud");
+
+                        //reflection to detect if the tree is falling :\
+                        bool isFalling = (bool)tf.GetType().GetField("falling", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(tf);
+                    
+                        if (!isFalling)
+                            return true;
+                    }
+                }
+            }
+            else if (tf.growthStage >= 3)
+            {
+                if (t != null && t.name.Contains("Ax"))
+                {
+                    Game1.playSound("axchop");
+                    if (tf.treeType != 7)
+                        Game1.playSound("leafrustle");
+                    //I think this is the line responsible for spawning some stupid particles I don't want, and the whole reason for this
+                    //method existing.
+                    Vector2 debrisVector = new Vector2(tileLocation.X * Game1.tileSize + (Game1.tileSize / 2), tileLocation.Y * Game1.tileSize + (Game1.tileSize / 2));
+
+                    location.debris.Add(new Debris(12, Game1.random.Next(t.upgradeLevel * 2, t.upgradeLevel * 4), debrisVector, tileLocation, 0, -1));
+                }
+                else if (explosion <= 0)
+                    return false;
+
+                //shake via reflection
+                typeof(Tree).GetMethod("shake", BindingFlags.NonPublic | BindingFlags.Instance).Invoke(tf, new object[] { tileLocation, true });
+
+                float num = 1f;
+                if (Game1.IsMultiplayer)
+                {
+                    Random multiplayerRandom = Game1.recentMultiplayerRandom;
+                }
+                else
+                {
+                    Random random = new Random((int)((double)Game1.uniqueIDForThisGame + (double)tileLocation.X * 7.0 + (double)tileLocation.Y * 11.0 + (double)Game1.stats.DaysPlayed + (double)tf.health));
+                }
+                if (explosion > 0)
+                {
+                    num = (float)explosion;
+                }
+                else
+                {
+                    switch (t.upgradeLevel)
+                    {
+                        case 0:
+                            num = 2f;
+                            break;
+                        case 1:
+                            num = 2.5f;
+                            break;
+                        case 2:
+                            num = 3.34f;
+                            break;
+                        case 3:
+                            num = 5f;
+                            break;
+                        case 4:
+                            num = 10f;
+                            break;
+                    }
+                }
+                tf.health = tf.health - num;
+                if ((double)tf.health <= 0.0)
+                {
+                    Game1.createDebris(12, (int)tileLocation.X, (int)tileLocation.Y, 4, (GameLocation)null);
+                    Game1.createRadialDebris(location, 12, (int)tileLocation.X, (int)tileLocation.Y, Game1.random.Next(20, 30), false, -1, false, -1);
+                    return true;
+                }
+            }
+            else if (tf.growthStage >= 1)
+            {
+                if (explosion > 0)
+                    return true;
+                if (location.Equals((object)Game1.currentLocation))
+                    Game1.playSound("cut");
+                if (t != null && t.name.Contains("Axe"))
+                {
+                    Game1.playSound("axchop");
+                    Game1.createRadialDebris(location, 12, (int)tileLocation.X, (int)tileLocation.Y, Game1.random.Next(10, 20), false, -1, false, -1);
+                }
+                if (t is Axe || t is Pickaxe || (t is Hoe || t is MeleeWeapon))
+                {
+                    Game1.createRadialDebris(location, 12, (int)tileLocation.X, (int)tileLocation.Y, Game1.random.Next(10, 20), false, -1, false, -1);
+                    if (t.name.Contains("Axe") && Game1.recentMultiplayerRandom.NextDouble() < (double)t.getLastFarmerToUse().ForagingLevel / 10.0)
+                        Game1.createDebris(12, (int)tileLocation.X, (int)tileLocation.Y, 1, (GameLocation)null);
+                    location.temporarySprites.Add(new TemporaryAnimatedSprite(17, tileLocation * (float)Game1.tileSize, Color.White, 8, false, 100f, 0, -1, -1f, -1, 0));
+                    return true;
+                }
+            }
+            else
+            {
+                if (explosion > 0)
+                    return true;
+                if (t.name.Contains("Axe") || t.name.Contains("Pick") || t.name.Contains("Hoe"))
+                {
+                    Game1.playSound("woodyHit");
+                    Game1.playSound("axchop");
+                    location.temporarySprites.Add(new TemporaryAnimatedSprite(17, tileLocation * (float)Game1.tileSize, Color.White, 8, false, 100f, 0, -1, -1f, -1, 0));
+
+                    long lastPlayerToHit = (long)tf.GetType().GetField("lastPlayerToHit", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(tf);
+
+                    if (lastPlayerToHit != 0L && Game1.getFarmer(lastPlayerToHit).getEffectiveSkillLevel(2) >= 1)
+                        Game1.createMultipleObjectDebris(308 + tf.treeType, (int)tileLocation.X, (int)tileLocation.Y, 1, t.getLastFarmerToUse().uniqueMultiplayerID, location);
+                    else if (!Game1.IsMultiplayer && Game1.player.getEffectiveSkillLevel(2) >= 1)
+                        Game1.createMultipleObjectDebris(308 + tf.treeType, (int)tileLocation.X, (int)tileLocation.Y, 1, t.getLastFarmerToUse().uniqueMultiplayerID, location);
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }
