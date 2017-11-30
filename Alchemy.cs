@@ -643,7 +643,9 @@ namespace EquivalentExchange
                     }
                     else if ((isPickaxe || isAxe))
                     {
-                        var largeResourceClusters = (List<ResourceClump>)currentPlayerLocation.GetType().GetField("resourceClumps", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance).GetValue(currentPlayerLocation);
+                        List<ResourceClump> largeResourceClusters = null;
+                        if (currentPlayerLocation is Farm || currentPlayerLocation is MineShaft)
+                            largeResourceClusters = (List<ResourceClump>)(currentPlayerLocation.GetType().GetField("resourceClumps", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance).GetValue(currentPlayerLocation));
                         if (currentPlayerLocation is Woods)
                             largeResourceClusters = (currentPlayerLocation as Woods).stumps;
                         if (largeResourceClusters != null)
@@ -668,7 +670,7 @@ namespace EquivalentExchange
                                     break;
                                 }
                             }
-                        }
+                        }                        
                     }
                     else if (isHoe)
                     {

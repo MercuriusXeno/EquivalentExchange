@@ -64,9 +64,8 @@ namespace EquivalentExchange
             //gonna try using this to detect the night event heuristically.
             GameEvents.UpdateTick += GameEvents_UpdateTick;
 
-            //slower, handles regen
-            GameEvents.QuarterSecondTick += GameEvents_QuarterSecondTick;
-
+            //TimeEvents.TimeOfDayChanged += TimeEvents_TimeOfDayChanged;
+            
             //wire up the PreRenderHUD event so I can display info bubbles when needed
             GraphicsEvents.OnPreRenderHudEvent += GraphicsEvents_OnPreRenderHudEvent;
 
@@ -94,30 +93,38 @@ namespace EquivalentExchange
             checkForCooking();
         }
 
-        private void LocationEvents_CurrentLocationChanged1(object sender, EventArgsCurrentLocationChanged e)
-        {
-            throw new NotImplementedException();
-        }
+        ////fires every 10 in game minutes so it's fairly slow.
+        //private void TimeEvents_TimeOfDayChanged(object sender, EventArgsIntChanged e)
+        //{
+        //    RegenerateAlchemyBarBasedOnLeylineDistance();
+        //}
+        
+        static int lastTickTime = 0;  // The time at the last tick processed.
 
-        private static void GameEvents_QuarterSecondTick(object sender, EventArgs e)
+        private static void RegenerateAlchemyBarBasedOnLeylineDistance()
         {
             if (!Context.IsWorldReady)
                 return;
 
-            RegenerateAlchemyBarBasedOnLeylineDistance();            
-        }
-
-        private static void RegenerateAlchemyBarBasedOnLeylineDistance()
-        {            
             //checking for paused or menuUp doesn't return true for some reason, but this is
             //a reliable way to check to see if the player is in a menu to prevent regen.
-            if (Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu != null)
-                return;            
+            if (Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu != null || !Game1.shouldTimePass())
+                return;
 
-            double leylineDistance = Math.Min(10D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation));
-            double regenAlchemyBar = Math.Min(10D - Math.Max(0, leylineDistance - instance.currentPlayerData.AlchemyLevel), 1D) / 10D;
-            regenAlchemyBar *= Alchemy.GetMaxAlkahestryEnergy() / 100D;
-            instance.currentPlayerData.AlkahestryCurrentEnergy = (float)Math.Min(Alchemy.GetCurrentAlkahestryEnergy() + Math.Max(0.05D, regenAlchemyBar), Alchemy.GetMaxAlkahestryEnergy());
+            int currentTime = Game1.gameTimeInterval;
+            if (currentTime - lastTickTime < 0)
+                lastTickTime = 0;
+            int timeElapsed = currentTime - lastTickTime;            
+            if (timeElapsed > 100)
+            {
+                double leylineDistance = Math.Min(10D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation));
+                double regenAlchemyBar = Math.Min(10D - Math.Max(0, leylineDistance - instance.currentPlayerData.AlchemyLevel), 1D) / 10D;
+                regenAlchemyBar *= Alchemy.GetMaxAlkahestryEnergy() / 100D;
+                instance.currentPlayerData.AlkahestryCurrentEnergy = (float)Math.Min(Alchemy.GetCurrentAlkahestryEnergy() + Math.Max(0.05D, regenAlchemyBar), Alchemy.GetMaxAlkahestryEnergy());
+                lastTickTime = currentTime;
+            }
+
+            
         }
 
         //integration considerations for chase's skills
@@ -200,6 +207,12 @@ namespace EquivalentExchange
         int heldCounter = 1;
         int updateTickCount = AUTO_REPEAT_UPDATE_RATE_REFRESH;
         private void GameEvents_UpdateTick(object sender, EventArgs e)
+        {
+            RegenerateAlchemyBarBasedOnLeylineDistance();
+            HandleLevelUpMenuAdding();
+        }
+
+        private void HandleLevelUpMenuAdding()
         {
             if (!Context.IsWorldReady)
                 return;
