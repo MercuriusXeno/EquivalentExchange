@@ -100,7 +100,8 @@ namespace EquivalentExchange
         //}
         
         static int lastTickTime = 0;  // The time at the last tick processed.
-
+        public static int CurrentDefaultTickInterval => 7000 + (Game1.currentLocation?.getExtraMillisecondsPerInGameMinuteForThisLocation() ?? 0);
+        public static int CurrentRegenResolution => CurrentDefaultTickInterval / 100;
         private static void RegenerateAlchemyBarBasedOnLeylineDistance()
         {
             if (!Context.IsWorldReady)
@@ -115,16 +116,14 @@ namespace EquivalentExchange
             if (currentTime - lastTickTime < 0)
                 lastTickTime = 0;
             int timeElapsed = currentTime - lastTickTime;            
-            if (timeElapsed > 100)
+            if (timeElapsed > CurrentRegenResolution)
             {
                 double leylineDistance = Math.Min(10D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation));
                 double regenAlchemyBar = Math.Min(10D - Math.Max(0, leylineDistance - instance.currentPlayerData.AlchemyLevel), 1D) / 10D;
                 regenAlchemyBar *= Alchemy.GetMaxAlkahestryEnergy() / 100D;
                 instance.currentPlayerData.AlkahestryCurrentEnergy = (float)Math.Min(Alchemy.GetCurrentAlkahestryEnergy() + Math.Max(0.05D, regenAlchemyBar), Alchemy.GetMaxAlkahestryEnergy());
                 lastTickTime = currentTime;
-            }
-
-            
+            }            
         }
 
         //integration considerations for chase's skills
