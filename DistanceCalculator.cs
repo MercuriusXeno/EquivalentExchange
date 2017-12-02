@@ -48,7 +48,7 @@ namespace EquivalentExchange
                     double mdist = double.MaxValue;
                     //Console.WriteLine(location.Name + " ~ Checking for map property...");
                     // AlchemyOffset, used to create path distance end points that can have a default penalty or have it as 0 for no default penalty
-                    if (location.map.Properties.ContainsKey(LeylineProperty))
+                    if (location?.map != null && location.map.Properties.ContainsKey(LeylineProperty))
                         mdist = Convert.ToDouble((string)location.map.Properties[LeylineProperty]) - DistancePenalty;
                     else // The hard offset of a alchemyOffset point overrides any distance based cost
                     {
