@@ -30,7 +30,7 @@ namespace EquivalentExchange
                 double RecursionMethod(GameLocation location, double dist)
                 {
                     //Console.WriteLine(location.Name + " ~ Trying to find source...");
-                    if (dist > MaxSearchRange)
+                    if (location == null || dist > MaxSearchRange)
                         return dist;
                     // Check if this is a leveled location
                     if (location is MineShaft)
