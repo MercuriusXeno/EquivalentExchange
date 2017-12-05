@@ -125,7 +125,7 @@ namespace EquivalentExchange
             //calculate luck's impact on rebound
             double luckFactor = Math.Max(0, (Game1.player.LuckLevel * LUCK_REBOUND_IMPACT) + Game1.dailyLuck);
 
-            return Math.Max(0, (BASE_REBOUND_RATE + distanceFactor) - luckFactor);
+            return Math.Max(0, (BASE_REBOUND_RATE * distanceFactor) - luckFactor);
         }
 
         internal static double GetTransmutationMarkupPercentage(int whichLevel)
