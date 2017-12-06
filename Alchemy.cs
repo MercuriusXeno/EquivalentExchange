@@ -535,12 +535,7 @@ namespace EquivalentExchange
             var toolPlayerFieldReflector = tool.GetType().GetField("lastUser", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             toolPlayerFieldReflector.SetValue(tool, Game1.player);
 
-            //I wrote this part, basically.
-            double mouseX = (double)(Game1.getMouseX() + Game1.viewport.X - Game1.player.getStandingX());
-            double mouseY = (double)(Game1.getMouseY() + Game1.viewport.Y - Game1.player.getStandingY());
-
-            //figure out where the cursor position should be, relative to the player.
-            Point hitLocation = new Point((int)Math.Round((mouseX + Game1.player.getStandingX() - (Game1.tileSize / 2)) / Game1.tileSize), (int)Math.Round((mouseY + Game1.player.getStandingY() - (Game1.tileSize / 2)) / Game1.tileSize));
+            Point hitLocation = GetMouseHitLocation();
 
             GameLocation currentPlayerLocation = Game1.player.currentLocation;
 
@@ -690,6 +685,16 @@ namespace EquivalentExchange
             {
                 SoundUtil.PlayMagickySound();
             }
+        }
+
+        private static Point GetMouseHitLocation()
+        {
+            //I wrote this part, basically.
+            double mouseX = (double)(Game1.getMouseX() + Game1.viewport.X - Game1.player.getStandingX());
+            double mouseY = (double)(Game1.getMouseY() + Game1.viewport.Y - Game1.player.getStandingY());
+
+            //figure out where the cursor position should be, relative to the player.
+            return new Point((int)Math.Round((mouseX + Game1.player.getStandingX() - (Game1.tileSize / 2)) / Game1.tileSize), (int)Math.Round((mouseY + Game1.player.getStandingY() - (Game1.tileSize / 2)) / Game1.tileSize));
         }
 
         private static void RestorePlayerExperience(int[] snapshotPlayerExperience)
