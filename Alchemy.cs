@@ -6,8 +6,7 @@ using StardewValley.TerrainFeatures;
 using System.Collections.Generic;
 using System.Reflection;
 using StardewValley.Locations;
-//using xTile.ObjectModel;
-//using xTile.Dimensions;
+using Netcode;
 
 namespace EquivalentExchange
 {
@@ -537,12 +536,12 @@ namespace EquivalentExchange
 
             Point hitLocation = GetMouseHitLocation();
 
-            GameLocation currentPlayerLocation = Game1.player.currentLocation;
+            GameLocation location = Game1.player.currentLocation;
 
             bool performedAction = false;
 
             //getting this out of the way, helps with easily determining tool types
-            bool isScythe = tool is MeleeWeapon && tool.name.ToLower().Contains("scythe");
+            bool isScythe = tool is MeleeWeapon && tool.Name.ToLower().Contains("scythe");
             bool isAxe = tool is StardewValley.Tools.Axe;
             bool isPickaxe = tool is StardewValley.Tools.Pickaxe;
             bool isHoe = tool is StardewValley.Tools.Hoe;
@@ -560,12 +559,12 @@ namespace EquivalentExchange
 
                     Vector2 offsetPosition = new Vector2(xOffset + hitLocation.X, yOffset + hitLocation.Y);
 
-                    if (currentPlayerLocation.objects.ContainsKey(offsetPosition))
+                    if (location.objects.ContainsKey(offsetPosition))
                     {
                         if (isAxe || isScythe || isPickaxe || isHoe)
                         {
                             var snapshotPlayerExperience = Game1.player.experiencePoints;
-                            performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+                            performedAction = DoToolFunction(location, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
                             RestorePlayerExperience(snapshotPlayerExperience);
                             if (performedAction && !isScythe)
                             {
@@ -574,17 +573,17 @@ namespace EquivalentExchange
 
                         }
                     }
-                    else if (currentPlayerLocation.terrainFeatures.ContainsKey(offsetPosition))
+                    else if (location.terrainFeatures.ContainsKey(offsetPosition))
                     {
                         //a terrain feature, rather than a tool check, might respond to the tool
-                        TerrainFeature terrainFeature = currentPlayerLocation.terrainFeatures[offsetPosition];
+                        TerrainFeature terrainFeature = location.terrainFeatures[offsetPosition];
 
                         //don't break stumps unless the player is in precision mode.
                         if (terrainFeature is Tree && isAxe && (!(terrainFeature as Tree).stump || EquivalentExchange.IsShiftKeyPressed()))
                         {
                             var snapshotPlayerExperience = Game1.player.experiencePoints;
                             //trees get removed automatically
-                            performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+                            performedAction = DoToolFunction(location, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
                             RestorePlayerExperience(snapshotPlayerExperience);
 
                             if (performedAction)
@@ -592,22 +591,22 @@ namespace EquivalentExchange
                                 HandleToolTransmuteConsequence();
                             }
                         }
-                        else if (terrainFeature is Grass && currentPlayerLocation is Farm && isScythe)
+                        else if (terrainFeature is Grass && location is Farm && isScythe)
                         {
-                            int oldHay = (currentPlayerLocation as Farm).piecesOfHay;
+                            int oldHay = (location as Farm).piecesOfHay;
                             var snapshotPlayerExperience = Game1.player.experiencePoints;
-                            if (terrainFeature.performToolAction(tool, 0, offsetPosition))
+                            if (terrainFeature.performToolAction(tool, 0, offsetPosition, location))
                             {
-                                currentPlayerLocation.terrainFeatures.Remove(offsetPosition);
+                                location.terrainFeatures.Remove(offsetPosition);
                                 //HandleToolTransmuteConsequence(); Scythe transmute is special and doesn't cost anything, but you don't get experience.
                                 performedAction = true;
                             }
                             RestorePlayerExperience(snapshotPlayerExperience);
 
                             //hay get! spawn the sprite animation for acquisition of hay
-                            if (oldHay < (currentPlayerLocation as Farm).piecesOfHay)
+                            if (oldHay < (location as Farm).piecesOfHay)
                             {
-                                SpawnHayAnimationSprite(currentPlayerLocation, offsetPosition, Game1.player);
+                                SpawnHayAnimationSprite(location, offsetPosition, Game1.player);
                             }
                         }
                         else if (terrainFeature is HoeDirt && isWateringCan && (tool as WateringCan).WaterLeft > 0)
@@ -616,10 +615,10 @@ namespace EquivalentExchange
                             if ((terrainFeature as HoeDirt).state != 1)
                             {
                                 var snapshotPlayerExperience = Game1.player.experiencePoints;
-                                terrainFeature.performToolAction(tool, 0, offsetPosition);
+                                terrainFeature.performToolAction(tool, 0, offsetPosition, location);
                                 RestorePlayerExperience(snapshotPlayerExperience);
                                 (tool as WateringCan).WaterLeft = (tool as WateringCan).WaterLeft - 1;
-                                SpawnWateringCanAnimationSprite(currentPlayerLocation, offsetPosition);
+                                SpawnWateringCanAnimationSprite(location, offsetPosition);
                                 HandleToolTransmuteConsequence();
                                 performedAction = true;
                             }
@@ -627,7 +626,7 @@ namespace EquivalentExchange
                         else if (isPickaxe && terrainFeature is HoeDirt)
                         {
                             var snapshotPlayerExperience = Game1.player.experiencePoints;
-                            performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+                            performedAction = DoToolFunction(location, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
                             RestorePlayerExperience(snapshotPlayerExperience);
 
                             if (performedAction)
@@ -638,39 +637,19 @@ namespace EquivalentExchange
                     }
                     else if ((isPickaxe || isAxe))
                     {
-                        List<ResourceClump> largeResourceClusters = null;
-                        if (currentPlayerLocation is Farm || currentPlayerLocation is MineShaft)
-                            largeResourceClusters = (List<ResourceClump>)(currentPlayerLocation.GetType().GetField("resourceClumps", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance).GetValue(currentPlayerLocation));
-                        if (currentPlayerLocation is Woods)
-                            largeResourceClusters = (currentPlayerLocation as Woods).stumps;
-                        if (largeResourceClusters != null)
+                        if (location is Farm || location is MineShaft)
                         {
-                            foreach (var resourceCluster in largeResourceClusters)
-                            {
-                                if (new Rectangle((int)resourceCluster.tile.X, (int)resourceCluster.tile.Y, resourceCluster.width, resourceCluster.height).Contains((int)offsetPosition.X, (int)offsetPosition.Y))
-                                {
-                                    if (TryToDestroyResourceCluster(resourceCluster, tool, 1, offsetPosition))
-                                    {
-                                        performedAction = true;
-                                        if (resourceCluster.health <= 0)
-                                        {
-                                            largeResourceClusters.Remove(resourceCluster);
-                                        }
-                                    }
-
-                                    if (performedAction)
-                                    {
-                                        HandleToolTransmuteConsequence();
-                                    }
-                                    break;
-                                }
-                            }
-                        }                        
+                            var largeResourceClusters = (List<ResourceClump>)(location.GetType().GetField("resourceClumps", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance).GetValue(location));
+                            DoLargeResourceClusterAction(largeResourceClusters, tool, offsetPosition, performedAction);
+                        } else if (location is Woods) { 
+                            var largeResourceClusters = (location as Woods).stumps;
+                            DoLargeResourceClusterAction(largeResourceClusters, tool, offsetPosition, performedAction);
+                        }
                     }
                     else if (isHoe)
                     {
                         var snapshotPlayerExperience = Game1.player.experiencePoints;
-                        performedAction = DoToolFunction(currentPlayerLocation, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
+                        performedAction = DoToolFunction(location, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
                         RestorePlayerExperience(snapshotPlayerExperience);
 
                         if (performedAction)
@@ -687,6 +666,33 @@ namespace EquivalentExchange
             }
         }
 
+        private static void DoLargeResourceClusterAction(ICollection<ResourceClump> largeResourceClusters, Tool tool, Vector2 offsetPosition, bool performedAction)
+        {
+            if (largeResourceClusters != null)
+            {
+                foreach (var resourceCluster in largeResourceClusters)
+                {
+                    if (new Rectangle((int)resourceCluster.tile.X, (int)resourceCluster.tile.Y, resourceCluster.width, resourceCluster.height).Contains((int)offsetPosition.X, (int)offsetPosition.Y))
+                    {
+                        if (TryToDestroyResourceCluster(resourceCluster, tool, 1, offsetPosition))
+                        {
+                            performedAction = true;
+                            if (resourceCluster.health <= 0)
+                            {
+                                largeResourceClusters.Remove(resourceCluster);
+                            }
+                        }
+
+                        if (performedAction)
+                        {
+                            HandleToolTransmuteConsequence();
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         private static Point GetMouseHitLocation()
         {
             //I wrote this part, basically.
@@ -697,7 +703,7 @@ namespace EquivalentExchange
             return new Point((int)Math.Round((mouseX + Game1.player.getStandingX() - (Game1.tileSize / 2)) / Game1.tileSize), (int)Math.Round((mouseY + Game1.player.getStandingY() - (Game1.tileSize / 2)) / Game1.tileSize));
         }
 
-        private static void RestorePlayerExperience(int[] snapshotPlayerExperience)
+        private static void RestorePlayerExperience(NetArray<int, NetInt> snapshotPlayerExperience)
         {
             for (int i = 0; i < Game1.player.experiencePoints.Length; i++)
             {
@@ -782,7 +788,7 @@ namespace EquivalentExchange
                     break;
             }
             performedAction = true;
-            resourceCluster.health = resourceCluster.health - Math.Max(1f, (float)(tool.upgradeLevel + 1) * 0.75f);
+            resourceCluster.health.Set(resourceCluster.health - Math.Max(1f, (float)(tool.upgradeLevel + 1) * 0.75f));
             Game1.createRadialDebris(Game1.currentLocation, debrisType, (int)offsetPosition.X + Game1.random.Next(resourceCluster.width / 2 + 1), (int)offsetPosition.Y + Game1.random.Next(resourceCluster.height / 2 + 1), Game1.random.Next(4, 9), false, -1, false, -1);
             if ((double)resourceCluster.health <= 0.0)
             {
@@ -885,7 +891,7 @@ namespace EquivalentExchange
                             Game1.createMultipleObjectDebris(709, (int)offsetPosition.X, (int)offsetPosition.Y, number2);
                         Game1.playSound("stumpCrack");
                         Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(23, offsetPosition * (float)Game1.tileSize, Color.White, 4, false, 140f, 0, Game1.tileSize * 2, -1f, Game1.tileSize * 2, 0));
-                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(Game1.animations, new Rectangle(385, 1522, (int)sbyte.MaxValue, 79), 2000f, 1, 1, offsetPosition * (float)Game1.tileSize + new Vector2(0.0f, 49f), false, false, 1E-05f, 0.016f, Color.White, 1f, 0.0f, 0.0f, 0.0f, false));
+                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(Game1.animations.Name, new Rectangle(385, 1522, (int)sbyte.MaxValue, 79), 2000f, 1, 1, offsetPosition * (float)Game1.tileSize + new Vector2(0.0f, 49f), false, false, 1E-05f, 0.016f, Color.White, 1f, 0.0f, 0.0f, 0.0f, false));
                         Game1.createRadialDebris(Game1.currentLocation, 34, (int)offsetPosition.X, (int)offsetPosition.Y, Game1.random.Next(4, 9), false, -1, false, -1);
                         return performedAction;
                 }
@@ -906,7 +912,7 @@ namespace EquivalentExchange
         private static void SpawnHayAnimationSprite(GameLocation currentPlayerLocation, Vector2 offsetPosition, StardewValley.Farmer player)
         {
             currentPlayerLocation.temporarySprites.Add(new TemporaryAnimatedSprite(28, offsetPosition * (float)Game1.tileSize + new Vector2((float)Game1.random.Next(-Game1.pixelZoom * 4, Game1.pixelZoom * 4), (float)Game1.random.Next(-Game1.pixelZoom * 4, Game1.pixelZoom * 4)), Color.Green, 8, Game1.random.NextDouble() < 0.5, (float)Game1.random.Next(60, 100), 0, -1, -1f, -1, 0));
-            currentPlayerLocation.temporarySprites.Add(new TemporaryAnimatedSprite(Game1.objectSpriteSheet, Game1.getSourceRectForStandardTileSheet(Game1.objectSpriteSheet, 178, 16, 16), 750f, 1, 0, player.position - new Vector2(0.0f, (float)(Game1.tileSize * 2)), false, false, player.position.Y / 10000f, 0.005f, Color.White, (float)Game1.pixelZoom, -0.005f, 0.0f, 0.0f, false)
+            currentPlayerLocation.temporarySprites.Add(new TemporaryAnimatedSprite(Game1.objectSpriteSheet.Name, Game1.getSourceRectForStandardTileSheet(Game1.objectSpriteSheet, 178, 16, 16), 750f, 1, 0, player.position - new Vector2(0.0f, (float)(Game1.tileSize * 2)), false, false, player.position.Y / 10000f, 0.005f, Color.White, (float)Game1.pixelZoom, -0.005f, 0.0f, 0.0f, false)
             {
                 motion = { Y = -1f },
                 layerDepth = (float)(1.0 - (double)Game1.random.Next(100) / 10000.0),
@@ -931,13 +937,13 @@ namespace EquivalentExchange
             bool performedAction = false;
             Vector2 index = new Vector2(x, y);
             Vector2 vector2 = new Vector2((float)(x + 0.5), (float)(y + 0.5));
-            if (tool is MeleeWeapon && tool.name.ToLower().Contains("scythe"))
+            if (tool is MeleeWeapon && tool.Name.ToLower().Contains("scythe"))
             {
                 var snapshotPlayerExperience = Game1.player.experiencePoints;
                 if (location.objects[index] != null)
                 {
                     StardewValley.Object hitObject = location.objects[index];
-                    if (hitObject.name.Contains("Weed") && hitObject.performToolAction(tool))
+                    if (hitObject.name.Contains("Weed") && hitObject.performToolAction(tool, location))
                     {
                         if (hitObject.type == "Crafting" && hitObject.fragility != 2)
                         {
@@ -982,11 +988,11 @@ namespace EquivalentExchange
                     if (!(location.terrainFeatures[index] as Tree).stump || EquivalentExchange.IsShiftKeyPressed())
                         performedAction = true;
                 }
-                if (!location.Objects.ContainsKey(index) || location.Objects[index].Type == null || !location.Objects[index].performToolAction(tool))
+                if (!location.Objects.ContainsKey(index) || location.Objects[index].Type == null || !location.Objects[index].performToolAction(tool, location))
                     return performedAction;
                 if (location.Objects[index].type.Equals("Crafting") && location.Objects[index].fragility != 2)
                 {
-                    List<Debris> debris1 = location.debris;
+                    var debris1 = location.debris;
                     int objectIndex = location.Objects[index].bigCraftable ? -location.Objects[index].ParentSheetIndex : location.Objects[index].ParentSheetIndex;
                     Debris debris2 = new Debris(objectIndex, index, index);
                     debris1.Add(debris2);
@@ -1021,7 +1027,7 @@ namespace EquivalentExchange
                         if (objectHit.minutesUntilReady > 0)
                         {
                             int num3 = Math.Max(1, tool.upgradeLevel + 1);
-                            objectHit.minutesUntilReady -= num3;
+                            objectHit.minutesUntilReady.Set(objectHit.minutesUntilReady - num3);
                             objectHit.shakeTimer = 200;
                             if (objectHit.minutesUntilReady > 0)
                             {
@@ -1067,14 +1073,14 @@ namespace EquivalentExchange
                     }
                     else
                     {
-                        if (!objectHit.performToolAction(tool))
+                        if (!objectHit.performToolAction(tool, location))
                         {
                             return performedAction;
                         }
                         objectHit.performRemoveAction(index, location);
                         if (objectHit.type.Equals("Crafting") && objectHit.fragility != 2)
                         {
-                            List<Debris> debris1 = Game1.currentLocation.debris;
+                            var debris1 = Game1.currentLocation.debris;
                             int objectIndex = objectHit.bigCraftable ? -objectHit.ParentSheetIndex : objectHit.ParentSheetIndex;
                             Vector2 toolLocation = who.GetToolLocation(false);
                             Rectangle boundingBox = who.GetBoundingBox();
@@ -1114,11 +1120,11 @@ namespace EquivalentExchange
                 }
                 else
                 {
-                    if (location.objects.ContainsKey(index) && location.Objects[index].performToolAction(tool))
+                    if (location.objects.ContainsKey(index) && location.Objects[index].performToolAction(tool, location))
                     {
                         if (location.Objects[index].type.Equals("Crafting") && location.Objects[index].fragility != 2)
                         {
-                            List<Debris> debris1 = location.debris;
+                            var debris1 = location.debris;
                             int objectIndex = location.Objects[index].bigCraftable ? -location.Objects[index].ParentSheetIndex : location.Objects[index].ParentSheetIndex;
                             Vector2 toolLocation = who.GetToolLocation(false);
                             Microsoft.Xna.Framework.Rectangle boundingBox = who.GetBoundingBox();

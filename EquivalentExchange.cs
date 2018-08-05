@@ -7,7 +7,7 @@ using System.Linq;
 using Microsoft.Xna.Framework.Input;
 using EquivalentExchange.Models;
 using System.IO;
-using System.Reflection;
+using Netcode;
 using StardewValley.Menus;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -73,7 +73,7 @@ namespace EquivalentExchange
             CheckForAllProfessionsMod();
 
             //location wireup to detect displacement from leylines for debug reasons
-            LocationEvents.CurrentLocationChanged += LocationEvents_CurrentLocationChanged;
+            LocationEvents.LocationsChanged += LocationEvents_LocationsChanged; ;
 
             //check for experience bars mod: if it's here we draw hud elements for the new alchemy skill
             CheckForExperienceBarsMod();
@@ -98,7 +98,7 @@ namespace EquivalentExchange
         //{
         //    RegenerateAlchemyBarBasedOnLeylineDistance();
         //}
-        
+
         static int lastTickTime = 0;  // The time at the last tick processed.
         public static int CurrentDefaultTickInterval => 7000 + (Game1.currentLocation?.getExtraMillisecondsPerInGameMinuteForThisLocation() ?? 0);
         public static int CurrentRegenResolution => CurrentDefaultTickInterval / 100;
@@ -186,7 +186,7 @@ namespace EquivalentExchange
             catch (Exception e)
             {
                 Log.error($"{LocalizationStrings.Get(LocalizationStrings.BadExperienceAmount)}.");
-                return;
+                throw e;
             }
 
             Alchemy.AddAlchemyExperience(amt);
@@ -296,11 +296,11 @@ namespace EquivalentExchange
         }
 
         //misleading event wireup is actually for the has-all-professions mod, which enables all professions at the appropriate level.
-        private void LocationEvents_CurrentLocationChanged(object sender, EventArgsCurrentLocationChanged e)
+        private void LocationEvents_LocationsChanged(object sender, EventArgsLocationsChanged e)
         {
             if (hasAllProfessionsMod)
             {
-                List<int> professions = Game1.player.professions;
+                NetList<int, NetInt> professions = Game1.player.professions;
                 List<List<int>> list = new List<List<int>> { Professions.firstRankProfessions, Professions.secondRankProfessions };
                 foreach (List<int> current in list)
                 {
@@ -505,7 +505,7 @@ namespace EquivalentExchange
                         Game1.spriteBatch.DrawString(Game1.smallFont, toolTransmuteDescriptionLine, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
                         dialogPositionMarkerY += rowSpacing;
                     }
-                } else if (heldItem is MeleeWeapon && (heldItem as MeleeWeapon).name.ToLower().Contains("scythe")) {
+                } else if (heldItem is MeleeWeapon && (heldItem as MeleeWeapon).Name.ToLower().Contains("scythe")) {
                     //stuff happens, no clue what
 
                     //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
@@ -765,7 +765,7 @@ namespace EquivalentExchange
                         {
                             Tool itemTool = heldItem as Tool;
 
-                            bool isScythe = itemTool is MeleeWeapon && itemTool.name.ToLower().Contains("scythe");
+                            bool isScythe = itemTool is MeleeWeapon && itemTool.Name.ToLower().Contains("scythe");
                             bool isAxe = itemTool is Axe;
                             bool isPickaxe = itemTool is Pickaxe;
                             bool isHoe = itemTool is Hoe;
