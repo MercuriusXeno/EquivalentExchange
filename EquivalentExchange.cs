@@ -12,6 +12,7 @@ using StardewValley.Menus;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley.Tools;
+using StardewValley.Network;
 
 namespace EquivalentExchange
 {
@@ -27,6 +28,9 @@ namespace EquivalentExchange
 
         //the mod's "static" instance, initialized by Entry. There caN ONly bE ONe
         public static EquivalentExchange instance;
+
+        // list of message handlers to use in this mod.
+        internal Dictionary<string, Action<IncomingMessage>> messageHandlers = new Dictionary<string, Action<IncomingMessage>>();
 
         public SaveDataModel currentPlayerData;
 
