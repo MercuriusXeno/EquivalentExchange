@@ -51,6 +51,9 @@
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Newtonsoft.Json, Version=11.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>packages\Newtonsoft.Json.11.0.2\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
@@ -67,10 +70,9 @@
     <Compile Include="AlchemyLevelUpMenu.cs" />
     <Compile Include="AlchemySkillsPage.cs" />
     <Compile Include="DrawingUtil.cs" />
-    <Compile Include="Events\EventArgsOvernightEvent.cs" />
-    <Compile Include="Events\OvernightEvent.cs" />
     <Compile Include="DistanceCalculator.cs" />
     <Compile Include="EquivalentExchange.cs" />
+    <Compile Include="Events\EventArgsServerOnClientJoin.cs" />
     <Compile Include="LocalizationStrings.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="Models\ModConfigModel.cs" />

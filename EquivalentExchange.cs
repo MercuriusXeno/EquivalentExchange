@@ -13,6 +13,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley.Tools;
 using StardewValley.Network;
+using EquivalentExchange.Events;
 
 namespace EquivalentExchange
 {
@@ -34,8 +35,35 @@ namespace EquivalentExchange
 
         public SaveDataModel currentPlayerData;
 
+        // instance helper property, remembers this client's player Id for helping things connect to the server [if applicable]
+        public long playerId;
+
         //config for if the mod is allowed to play sounds
         public static bool canPlaySounds;
+
+        public const string MSG_DATA = "EquivalentExchange.AlchemySkill.Data";
+        public const string MSG_EXPERIENCE = "EquivalentExchange.AlchemySkill.Experience";
+        public const string MSG_LEVEL = "EquivalentExchange.AlchemySkill.Level";
+        public const string MSG_CURRENT_ENERGY = "EquivalentExchange.AlchemySkill.CurrentEnergy";
+        public const string MSG_MAX_ENERGY = "EquivalentExchange.AlchemySkill.MaxEnergy";
+        public const string MSG_TOTAL_VALUE_TRANSMUTED = "EquivalentExchange.AlchemySkill.TotalValueTransumted";
+
+        // Server side, when a client joins, stolen from Space with love.
+        public static event EventHandler<EventArgsServerOnClientJoin> ServerOnClientJoin;
+
+        // server side invocation of a client joining the server.
+        internal static void InvokeServerOnClientJoin(GameServer server, long peer)
+        {
+            var args = new EventArgsServerOnClientJoin
+            {
+                FarmerId = peer
+            };
+
+            if (ServerOnClientJoin == null)
+                return;
+
+            Util.InvokeEvent("EquivalentExchange.ServerOnClientJoin", ServerOnClientJoin.GetInvocationList(), server, args);
+        }
 
         //handles all the things.
         public override void Entry(IModHelper helper)
@@ -92,9 +120,99 @@ namespace EquivalentExchange
             //post render event for skills menu
             GraphicsEvents.OnPostRenderGuiEvent += DrawAfterGUI;
 
+            // stuff we have to do for multiplayer now
+            ServerOnClientJoin += EquivalentExchange_ServerOnClientJoin; ;
+            Util.RegisterMessageHandler(MSG_DATA, OnDataMessage);
+            Util.RegisterMessageHandler(MSG_EXPERIENCE, OnExpMessage);
+            Util.RegisterMessageHandler(MSG_LEVEL, OnLevelMessage);
+            Util.RegisterMessageHandler(MSG_CURRENT_ENERGY, OnCurrentEnergyMessage);
+            Util.RegisterMessageHandler(MSG_MAX_ENERGY, OnMaxEnergyMessage);
+            Util.RegisterMessageHandler(MSG_TOTAL_VALUE_TRANSMUTED, OnTransmutedValueMessage);
+
             //check for chase's skills
             checkForLuck();
             checkForCooking();
+        }
+
+        private void OnTransmutedValueMessage(IncomingMessage msg)
+        {
+            currentPlayerData.TotalValueTransmuted[msg.FarmerID] = msg.Reader.ReadInt32();
+        }
+
+        private void OnMaxEnergyMessage(IncomingMessage msg)
+        {
+            currentPlayerData.AlkahestryMaxEnergy[msg.FarmerID] = (float)msg.Reader.ReadDouble();
+        }
+
+        private void OnCurrentEnergyMessage(IncomingMessage msg)
+        {
+            currentPlayerData.AlkahestryCurrentEnergy[msg.FarmerID] = (float)msg.Reader.ReadDouble();
+        }
+
+        private void OnLevelMessage(IncomingMessage msg)
+        {
+            currentPlayerData.AlchemyLevel[msg.FarmerID] = msg.Reader.ReadInt32();
+        }
+
+        private void OnExpMessage(IncomingMessage msg)
+        {
+            currentPlayerData.AlchemyExperience[msg.FarmerID] = msg.Reader.ReadInt32();
+        }
+
+        // unabashedly stolen from spacechase, like all things.
+        private void OnDataMessage(IncomingMessage msg)
+        {
+            int count = msg.Reader.ReadInt32();
+            for (int i = 0; i < count; ++i)
+            {
+                long id = msg.Reader.ReadInt64();
+                // the order of these params matters, it's in the same order as the fields appear in the save data model
+                int level = msg.Reader.ReadInt32();
+                int experience = msg.Reader.ReadInt32();
+                float maxEnergy = (float)msg.Reader.ReadDouble();
+                float currentEnergy = (float)msg.Reader.ReadDouble();
+                int totalValueTransmuted = msg.Reader.ReadInt32();
+                currentPlayerData.AlchemyLevel[id] = level;
+                currentPlayerData.AlchemyExperience[id] = experience;
+                currentPlayerData.AlkahestryMaxEnergy[id] = maxEnergy;
+                currentPlayerData.AlkahestryCurrentEnergy[id] = currentEnergy;
+                currentPlayerData.TotalValueTransmuted[id] = totalValueTransmuted;
+            }
+        }
+
+        private void EquivalentExchange_ServerOnClientJoin(object sender, EventArgsServerOnClientJoin e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                // arbitrarily using the first property as the index master, it should be irrelevant, as each should have the same # of keys.
+                writer.Write(currentPlayerData.AlchemyLevel.Count);
+                foreach (var lvl in currentPlayerData.AlchemyLevel)
+                {
+                    writer.Write(lvl.Key);
+                    writer.Write(lvl.Value);
+                }
+                // we don't need the key beyond this point.
+                foreach(var exp in currentPlayerData.AlchemyExperience)
+                {
+                    writer.Write(exp.Value);
+                }
+                foreach(var maxEnergy in currentPlayerData.AlkahestryMaxEnergy)
+                {
+                    writer.Write((double)maxEnergy.Value);
+                }
+                foreach (var currentEnergy in currentPlayerData.AlkahestryCurrentEnergy)
+                {
+                    writer.Write((double)currentEnergy.Value);
+                }
+                foreach (var totalValue in currentPlayerData.TotalValueTransmuted)
+                {
+                    writer.Write(totalValue.Value);
+                }
+
+                var server = (GameServer)sender;
+                Util.ServerSendTo(e.FarmerID, )
+            }
         }
 
         ////fires every 10 in game minutes so it's fairly slow.
@@ -360,6 +478,9 @@ namespace EquivalentExchange
             // save is loaded
             if (Context.IsWorldReady)
             {
+                // the first thing to do is set this instance's player Id, we use it, all over the place.
+                playerId = Game1.player.uniqueMultiplayerID;
+
                 //fetch the alchemy save for this game file.
                 instance.currentPlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{Game1.uniqueIDForThisGame.ToString()}.json"));
 

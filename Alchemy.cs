@@ -418,7 +418,7 @@ namespace EquivalentExchange
         public static void IncreaseTotalTransmuteValue(int transmuteValue)
         {
             EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted += transmuteValue;
-            EquivalentExchange.instance.currentPlayerData.AlkahestryMaxEnergy = (int)Math.Floor(Math.Sqrt(EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted));
+            EquivalentExchange.instance.currentPlayerData.AlkahestryMaxEnergy[EquivalentExchange.instance.playerId] = (int)Math.Floor(Math.Sqrt(EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted[EquivalentExchange.instance.playerId]));
         }
 
         public static void ReduceAlkahestryEnergy(double energyCost)
