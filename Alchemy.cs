@@ -47,15 +47,8 @@ namespace EquivalentExchange
         //increment alchemy experience and handle levelups if applicable
         public static void AddAlchemyExperience(int exp)
         {
-            EquivalentExchange.instance.currentPlayerData.AlchemyExperience += exp;
-
-            while (EquivalentExchange.instance.currentPlayerData.AlchemyLevel < 10 && EquivalentExchange.instance.currentPlayerData.AlchemyExperience >= GetAlchemyExperienceNeededForNextLevel())
-            {
-                EquivalentExchange.instance.currentPlayerData.AlchemyLevel++;
-                //player gained a skilllevel, flag the night time skill up to appear.
-                EquivalentExchange.instance.AddSkillUpMenuAppearance(EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
-            }
-        }
+            EquivalentExchange.AddAlchemyExperience(exp);
+        }        
 
         //overloaded method for how much experience is needed to reach a specific level.
         public static int GetAlchemyExperienceNeededForLevel(int level)
@@ -68,7 +61,7 @@ namespace EquivalentExchange
         //how much experience is needed to reach next level
         public static int GetAlchemyExperienceNeededForNextLevel()
         {
-            return GetAlchemyExperienceNeededForLevel(EquivalentExchange.instance.currentPlayerData.AlchemyLevel + 1);
+            return GetAlchemyExperienceNeededForLevel(EquivalentExchange.GetAlchemyLevel() + 1);
         }
 
         //get the coefficient for stamina drain
@@ -82,7 +75,7 @@ namespace EquivalentExchange
         public static double GetAlchemyEnergyCostSkillMultiplier()
         {
             //base of 1 - 0.075 per skill level - profession modifiers
-            return GetAlchemyEnergyCostSkillMultiplierForLevel(EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
+            return GetAlchemyEnergyCostSkillMultiplierForLevel(EquivalentExchange.GetAlchemyLevel());
         }
 
         //algorithm to return stamina cost for the act of transmuting/liquidating an item, based on player skill and item value
@@ -94,13 +87,13 @@ namespace EquivalentExchange
         //get the coefficient for item sell value
         public static double GetLiquidationValuePercentage()
         {
-            return GetLiquidationValuePercentage(EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
+            return GetLiquidationValuePercentage(EquivalentExchange.GetAlchemyLevel());
         }
 
         //get the coefficient for item price for transmutation
         public static double GetTransmutationMarkupPercentage()
         {
-            return GetTransmutationMarkupPercentage(EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
+            return GetTransmutationMarkupPercentage(EquivalentExchange.GetAlchemyLevel());
         }
 
         //the chance a player will fail to transmute/liquidate an item
@@ -116,7 +109,7 @@ namespace EquivalentExchange
             }
 
             //the distance factor is whatever the raw distance is minus the player's alchemy level, which reduces the impact of distance from leylines to rebounds
-            double distanceFactor = Math.Max(0D, distance - EquivalentExchange.instance.currentPlayerData.AlchemyLevel);
+            double distanceFactor = Math.Max(0D, distance - EquivalentExchange.GetAlchemyLevel());
 
             //normalize distance factor - each map adds roughly 5% rebound, so dividing by 20D is what we're going for.
             distanceFactor *= MAP_DISTANCE_FACTOR;
@@ -205,7 +198,7 @@ namespace EquivalentExchange
 
         public static double GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses()
         {
-            return GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(EquivalentExchange.instance.currentPlayerData.AlchemyLevel, Game1.player.LuckLevel);
+            return GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(EquivalentExchange.GetAlchemyLevel(), Game1.player.LuckLevel);
         }
 
         //check to see if this is a lucky [free] transmute
@@ -407,28 +400,27 @@ namespace EquivalentExchange
 
         public static float GetCurrentAlkahestryEnergy()
         {
-            return EquivalentExchange.instance.currentPlayerData.AlkahestryCurrentEnergy;
+            return EquivalentExchange.GetCurrentAlkahestryEnergy();
         }
 
         public static float GetMaxAlkahestryEnergy()
         {
-            return EquivalentExchange.instance.currentPlayerData.AlkahestryMaxEnergy;
+            return EquivalentExchange.GetMaxAlkahestryEnergy();
         }
 
         public static void IncreaseTotalTransmuteValue(int transmuteValue)
         {
-            EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted += transmuteValue;
-            EquivalentExchange.instance.currentPlayerData.AlkahestryMaxEnergy[EquivalentExchange.instance.playerId] = (int)Math.Floor(Math.Sqrt(EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted[EquivalentExchange.instance.playerId]));
+            EquivalentExchange.AddTotalValueTransmuted(transmuteValue);
         }
 
         public static void ReduceAlkahestryEnergy(double energyCost)
         {
-            EquivalentExchange.instance.currentPlayerData.AlkahestryCurrentEnergy -= (float)energyCost;
+            EquivalentExchange.SetCurrentAlkahestryEnergy(EquivalentExchange.GetCurrentAlkahestryEnergy() -  (float)energyCost);
         }
 
         internal static void RestoreAlkahestryEnergyForNewDay()
         {
-            EquivalentExchange.instance.currentPlayerData.AlkahestryCurrentEnergy = Alchemy.GetMaxAlkahestryEnergy();
+            EquivalentExchange.SetCurrentAlkahestryEnergy(Alchemy.GetMaxAlkahestryEnergy());
         }
 
         public static void HandleNormalizeEvent(Item heldItem, int actualValue)
@@ -521,7 +513,7 @@ namespace EquivalentExchange
         {
             if (EquivalentExchange.IsShiftKeyPressed())
                 return 0;
-            return (int)Math.Floor(EquivalentExchange.instance.currentPlayerData.AlchemyLevel / 3D);
+            return (int)Math.Floor(EquivalentExchange.GetAlchemyLevel() / 3D);
         }
 
         //this was almost entirely stolen from spacechase0 with very little contribution on my part.

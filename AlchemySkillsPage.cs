@@ -63,7 +63,7 @@ namespace EquivalentExchange
                 int whichProfession = Professions.getProfessionForSkill(skillIndex + 1);
                 string professionBlurb = Professions.GetProfessionTitleFromNumber(whichProfession);
                 string professionTitle = Professions.GetProfessionDescription(whichProfession);
-                bool flag = EquivalentExchange.instance.currentPlayerData.AlchemyLevel > skillIndex;
+                bool flag = EquivalentExchange.GetAlchemyLevel() > skillIndex;
                 
                 if (flag && (skillIndex + 1) % 5 == 0)
                 {
@@ -173,10 +173,10 @@ namespace EquivalentExchange
             {
                 //there's only one skill to draw here.
                 int index2 = this.skillOrderIndex;
-                bool flag1 = EquivalentExchange.instance.currentPlayerData.AlchemyLevel > index1;
+                bool flag1 = EquivalentExchange.GetAlchemyLevel() > index1;
                 bool flag2 = EquivalentExchange.instance.showLevelUpMenusByRank.Count > 0;
                 string text = (index1 == 0 ? $"{LocalizationStrings.Get(LocalizationStrings.Alchemy)}" : "");
-                int number = EquivalentExchange.instance.currentPlayerData.AlchemyLevel;
+                int number = EquivalentExchange.GetAlchemyLevel();
                 Rectangle rectangle = Rectangle.Empty;
                 //alchemy skill text             
                 if (!text.Equals(""))

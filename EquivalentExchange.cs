@@ -13,7 +13,8 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley.Tools;
 using StardewValley.Network;
-using EquivalentExchange.Events;
+using SpaceCore.Events;
+using SpaceCore;
 
 namespace EquivalentExchange
 {
@@ -28,15 +29,10 @@ namespace EquivalentExchange
         public IModHelper eeHelper;
 
         //the mod's "static" instance, initialized by Entry. There caN ONly bE ONe
-        public static EquivalentExchange instance;
+        public static EquivalentExchange instance;        
 
-        // list of message handlers to use in this mod.
-        internal Dictionary<string, Action<IncomingMessage>> messageHandlers = new Dictionary<string, Action<IncomingMessage>>();
-
-        public SaveDataModel currentPlayerData;
-
-        // instance helper property, remembers this client's player Id for helping things connect to the server [if applicable]
-        public long playerId;
+        // holds the player data for all active players, then uses statics to expose this player's data.
+        public SaveDataModel currentPlayerData;        
 
         //config for if the mod is allowed to play sounds
         public static bool canPlaySounds;
@@ -47,24 +43,7 @@ namespace EquivalentExchange
         public const string MSG_CURRENT_ENERGY = "EquivalentExchange.AlchemySkill.CurrentEnergy";
         public const string MSG_MAX_ENERGY = "EquivalentExchange.AlchemySkill.MaxEnergy";
         public const string MSG_TOTAL_VALUE_TRANSMUTED = "EquivalentExchange.AlchemySkill.TotalValueTransumted";
-
-        // Server side, when a client joins, stolen from Space with love.
-        public static event EventHandler<EventArgsServerOnClientJoin> ServerOnClientJoin;
-
-        // server side invocation of a client joining the server.
-        internal static void InvokeServerOnClientJoin(GameServer server, long peer)
-        {
-            var args = new EventArgsServerOnClientJoin
-            {
-                FarmerId = peer
-            };
-
-            if (ServerOnClientJoin == null)
-                return;
-
-            Util.InvokeEvent("EquivalentExchange.ServerOnClientJoin", ServerOnClientJoin.GetInvocationList(), server, args);
-        }
-
+        
         //handles all the things.
         public override void Entry(IModHelper helper)
         {
@@ -92,11 +71,8 @@ namespace EquivalentExchange
             //set texture files in memory, they're tiny things.
             DrawingUtil.HandleTextureCaching();
 
-            //trying something completely different from a patched event hook...
-            //gonna try using this to detect the night event heuristically.
+            //handles high resolution update ticks, like regeneration and held keys.
             GameEvents.UpdateTick += GameEvents_UpdateTick;
-
-            //TimeEvents.TimeOfDayChanged += TimeEvents_TimeOfDayChanged;
             
             //wire up the PreRenderHUD event so I can display info bubbles when needed
             GraphicsEvents.OnPreRenderHudEvent += GraphicsEvents_OnPreRenderHudEvent;
@@ -119,19 +95,65 @@ namespace EquivalentExchange
 
             //post render event for skills menu
             GraphicsEvents.OnPostRenderGuiEvent += DrawAfterGUI;
+            
+            // handles end of night event requirements like alchemy energy being restored and level ups.
+            SpaceEvents.ShowNightEndMenus += SpaceEvents_ShowNightEndMenus; 
 
-            // stuff we have to do for multiplayer now
-            ServerOnClientJoin += EquivalentExchange_ServerOnClientJoin; ;
-            Util.RegisterMessageHandler(MSG_DATA, OnDataMessage);
-            Util.RegisterMessageHandler(MSG_EXPERIENCE, OnExpMessage);
-            Util.RegisterMessageHandler(MSG_LEVEL, OnLevelMessage);
-            Util.RegisterMessageHandler(MSG_CURRENT_ENERGY, OnCurrentEnergyMessage);
-            Util.RegisterMessageHandler(MSG_MAX_ENERGY, OnMaxEnergyMessage);
-            Util.RegisterMessageHandler(MSG_TOTAL_VALUE_TRANSMUTED, OnTransmutedValueMessage);
+            // stuff we have to do for multiplayer now, handles client join events to cascade data to the non-hosts.
+            SpaceEvents.ServerGotClient += SpaceEvents_ServerGotClient;
+
+            Networking.RegisterMessageHandler(MSG_DATA, OnDataMessage);
+            Networking.RegisterMessageHandler(MSG_EXPERIENCE, OnExpMessage);
+            Networking.RegisterMessageHandler(MSG_LEVEL, OnLevelMessage);
+            Networking.RegisterMessageHandler(MSG_CURRENT_ENERGY, OnCurrentEnergyMessage);
+            Networking.RegisterMessageHandler(MSG_MAX_ENERGY, OnMaxEnergyMessage);
+            Networking.RegisterMessageHandler(MSG_TOTAL_VALUE_TRANSMUTED, OnTransmutedValueMessage);
 
             //check for chase's skills
-            checkForLuck();
-            checkForCooking();
+            CheckForLuck();
+            CheckForCooking();
+        }
+
+        private void SpaceEvents_ShowNightEndMenus(object sender, EventArgsShowNightEndMenus e)
+        {
+            //the new day hook seems to be inconsistent, so this is a full restore at the end of the night.
+            Alchemy.RestoreAlkahestryEnergyForNewDay();
+            AddEndOfNightMenus();
+        }
+
+        private void SpaceEvents_ServerGotClient(object sender, EventArgsServerGotClient e)
+        {
+            using (var stream = new MemoryStream())
+            using (var writer = new BinaryWriter(stream))
+            {
+                // arbitrarily using the first property as the index master, it should be irrelevant, as each should have the same # of keys.
+                writer.Write(currentPlayerData.AlchemyLevel.Count);
+                foreach (var lvl in currentPlayerData.AlchemyLevel)
+                {
+                    writer.Write(lvl.Key);
+                    writer.Write(lvl.Value);
+                }
+                // we don't need the key beyond this point.
+                foreach (var exp in currentPlayerData.AlchemyExperience)
+                {
+                    writer.Write(exp.Value);
+                }
+                foreach (var maxEnergy in currentPlayerData.MaxEnergy)
+                {
+                    writer.Write((double)maxEnergy.Value);
+                }
+                foreach (var currentEnergy in currentPlayerData.CurrentEnergy)
+                {
+                    writer.Write((double)currentEnergy.Value);
+                }
+                foreach (var totalValue in currentPlayerData.TotalValueTransmuted)
+                {
+                    writer.Write(totalValue.Value);
+                }
+
+                var server = (GameServer)sender;
+                Networking.ServerSendTo(e.FarmerID, MSG_DATA, stream.ToArray());
+            }
         }
 
         private void OnTransmutedValueMessage(IncomingMessage msg)
@@ -141,12 +163,12 @@ namespace EquivalentExchange
 
         private void OnMaxEnergyMessage(IncomingMessage msg)
         {
-            currentPlayerData.AlkahestryMaxEnergy[msg.FarmerID] = (float)msg.Reader.ReadDouble();
+            currentPlayerData.MaxEnergy[msg.FarmerID] = (float)msg.Reader.ReadDouble();
         }
 
         private void OnCurrentEnergyMessage(IncomingMessage msg)
         {
-            currentPlayerData.AlkahestryCurrentEnergy[msg.FarmerID] = (float)msg.Reader.ReadDouble();
+            currentPlayerData.CurrentEnergy[msg.FarmerID] = (float)msg.Reader.ReadDouble();
         }
 
         private void OnLevelMessage(IncomingMessage msg)
@@ -174,53 +196,12 @@ namespace EquivalentExchange
                 int totalValueTransmuted = msg.Reader.ReadInt32();
                 currentPlayerData.AlchemyLevel[id] = level;
                 currentPlayerData.AlchemyExperience[id] = experience;
-                currentPlayerData.AlkahestryMaxEnergy[id] = maxEnergy;
-                currentPlayerData.AlkahestryCurrentEnergy[id] = currentEnergy;
+                currentPlayerData.MaxEnergy[id] = maxEnergy;
+                currentPlayerData.CurrentEnergy[id] = currentEnergy;
                 currentPlayerData.TotalValueTransmuted[id] = totalValueTransmuted;
             }
         }
-
-        private void EquivalentExchange_ServerOnClientJoin(object sender, EventArgsServerOnClientJoin e)
-        {
-            using (var stream = new MemoryStream())
-            using (var writer = new BinaryWriter(stream))
-            {
-                // arbitrarily using the first property as the index master, it should be irrelevant, as each should have the same # of keys.
-                writer.Write(currentPlayerData.AlchemyLevel.Count);
-                foreach (var lvl in currentPlayerData.AlchemyLevel)
-                {
-                    writer.Write(lvl.Key);
-                    writer.Write(lvl.Value);
-                }
-                // we don't need the key beyond this point.
-                foreach(var exp in currentPlayerData.AlchemyExperience)
-                {
-                    writer.Write(exp.Value);
-                }
-                foreach(var maxEnergy in currentPlayerData.AlkahestryMaxEnergy)
-                {
-                    writer.Write((double)maxEnergy.Value);
-                }
-                foreach (var currentEnergy in currentPlayerData.AlkahestryCurrentEnergy)
-                {
-                    writer.Write((double)currentEnergy.Value);
-                }
-                foreach (var totalValue in currentPlayerData.TotalValueTransmuted)
-                {
-                    writer.Write(totalValue.Value);
-                }
-
-                var server = (GameServer)sender;
-                Util.ServerSendTo(e.FarmerID, )
-            }
-        }
-
-        ////fires every 10 in game minutes so it's fairly slow.
-        //private void TimeEvents_TimeOfDayChanged(object sender, EventArgsIntChanged e)
-        //{
-        //    RegenerateAlchemyBarBasedOnLeylineDistance();
-        //}
-
+        
         static int lastTickTime = 0;  // The time at the last tick processed.
         public static int CurrentDefaultTickInterval => 7000 + (Game1.currentLocation?.getExtraMillisecondsPerInGameMinuteForThisLocation() ?? 0);
         public static int CurrentRegenResolution => CurrentDefaultTickInterval / 100;
@@ -241,17 +222,93 @@ namespace EquivalentExchange
             if (timeElapsed > CurrentRegenResolution)
             {
                 double leylineDistance = Math.Min(10D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation));
-                double regenAlchemyBar = Math.Min(10D - Math.Max(0, leylineDistance - instance.currentPlayerData.AlchemyLevel), 1D) / 10D;
+                double regenAlchemyBar = Math.Min(10D - Math.Max(0, leylineDistance - GetAlchemyLevel()), 1D) / 10D;
                 regenAlchemyBar *= Alchemy.GetMaxAlkahestryEnergy() / 100D;
-                instance.currentPlayerData.AlkahestryCurrentEnergy = (float)Math.Min(Alchemy.GetCurrentAlkahestryEnergy() + Math.Max(0.05D, regenAlchemyBar), Alchemy.GetMaxAlkahestryEnergy());
+                SetCurrentAlkahestryEnergy((float)Math.Min(Alchemy.GetCurrentAlkahestryEnergy() + Math.Max(0.05D, regenAlchemyBar), Alchemy.GetMaxAlkahestryEnergy()));
                 lastTickTime = currentTime;
             }            
+        }
+
+        public static int GetAlchemyExperience()
+        {
+            return EquivalentExchange.instance.currentPlayerData.AlchemyExperience[GetPlayerId()];
+        }
+
+        public static void SetAlchemyExperience(int exp)
+        {
+            EquivalentExchange.instance.currentPlayerData.AlchemyExperience[GetPlayerId()] = exp;
+        }
+
+        public static int GetAlchemyLevel()
+        {
+            return EquivalentExchange.instance.currentPlayerData.AlchemyLevel[GetPlayerId()];
+        }
+
+        public static void SetAlchemyLevel(int lvl)
+        {
+            EquivalentExchange.instance.currentPlayerData.AlchemyLevel[GetPlayerId()] = lvl;
+        }
+
+        public static float GetCurrentAlkahestryEnergy()
+        {
+            return EquivalentExchange.instance.currentPlayerData.CurrentEnergy[GetPlayerId()];
+        }
+
+        public static void SetCurrentAlkahestryEnergy(float energy)
+        {
+            EquivalentExchange.instance.currentPlayerData.CurrentEnergy[GetPlayerId()] = energy;
+        }
+
+        public static float GetMaxAlkahestryEnergy()
+        {
+            return EquivalentExchange.instance.currentPlayerData.MaxEnergy[GetPlayerId()];
+        }
+
+        public static void SetMaxAlkahestryEnergy(float energy)
+        {
+            EquivalentExchange.instance.currentPlayerData.MaxEnergy[GetPlayerId()] = energy;
+        }
+
+        public static int GetTotalValueTransmuted()
+        {
+            return EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted[GetPlayerId()];
+        }
+
+        public static void SetTotalValueTransmuted(int value)
+        {
+            EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted[GetPlayerId()] = value;
+        }
+
+        public static long GetPlayerId()
+        {
+            return Game1.player.uniqueMultiplayerID;
+        }
+
+        public static void AddTotalValueTransmuted(int value)
+        {
+            SetTotalValueTransmuted(GetTotalValueTransmuted() + value);
+            var updatedMaxEnergy = (int)Math.Floor(Math.Sqrt(GetTotalValueTransmuted()));
+            EquivalentExchange.SetMaxAlkahestryEnergy(updatedMaxEnergy);
+        }
+
+        public static void AddAlchemyExperience(int exp)
+        {
+            SetAlchemyExperience(GetAlchemyExperience() + exp);
+
+            while (GetAlchemyLevel() < 10 && GetAlchemyExperience() >= Alchemy.GetAlchemyExperienceNeededForNextLevel())
+            {
+                SetAlchemyLevel(GetAlchemyLevel() + 1);
+
+                //player gained a skilllevel, flag the night time skill up to appear.
+                EquivalentExchange.instance.AddSkillUpMenuAppearance(GetAlchemyLevel());
+            }
         }
 
         //integration considerations for chase's skills
 
         public static bool hasLuck = false;
-        private void checkForLuck()
+
+        private void CheckForLuck()
         {
             if (!Helper.ModRegistry.IsLoaded("spacechase0.LuckSkill"))
             {
@@ -263,7 +320,7 @@ namespace EquivalentExchange
         }
 
         public static bool hasCooking = false;
-        private void checkForCooking()
+        private void CheckForCooking()
         {
             if (!Helper.ModRegistry.IsLoaded("spacechase0.CookingSkill"))
             {
@@ -327,27 +384,17 @@ namespace EquivalentExchange
 
         int heldCounter = 1;
         int updateTickCount = AUTO_REPEAT_UPDATE_RATE_REFRESH;
+
         private void GameEvents_UpdateTick(object sender, EventArgs e)
         {
             RegenerateAlchemyBarBasedOnLeylineDistance();
-            HandleLevelUpMenuAdding();
+            HandleHeldTransmuteKeysUpdateTick();
         }
 
-        private void HandleLevelUpMenuAdding()
+        private void HandleHeldTransmuteKeysUpdateTick()
         {
             if (!Context.IsWorldReady)
                 return;
-
-            //unsure if this does what I think it does
-            if (Game1.player.isEmoting && Game1.player.CurrentEmote == 24)
-            {
-                //the player has just answered "yes" to sleep? or the player passed out like a chump.
-                //the new day hook seems to be inconsistent, so this is a full restore at the end of the night.
-                Alchemy.RestoreAlkahestryEnergyForNewDay();
-
-                if (Game1.currentLocation.lastQuestionKey == null || Game1.currentLocation.lastQuestionKey.Equals("Sleep"))
-                    AddEndOfNightMenus();
-            }
 
             if (transmuteKeyHeld)
             {
@@ -373,17 +420,15 @@ namespace EquivalentExchange
         //show the level up menus at night when you hit a profession breakpoint.
         private void AddEndOfNightMenus()
         {
-            if (!Context.IsWorldReady)
-                return;
-
-            //trick the game into a full black backdrop early, this just keeps the sequence from looking bizarre.
-            Game1.fadeToBlackAlpha = 1F;
-
-            bool playerNeedsLevelFiveProfession = currentPlayerData.AlchemyLevel >= 5 && !Game1.player.professions.Contains((int)Professions.Shaper) && !Game1.player.professions.Contains((int)Professions.Sage);
-            bool playerNeedsLevelTenProfession = currentPlayerData.AlchemyLevel >= 10 && !Game1.player.professions.Contains((int)Professions.Transmuter) && !Game1.player.professions.Contains((int)Professions.Adept) && !Game1.player.professions.Contains((int)Professions.Aurumancer) && !Game1.player.professions.Contains((int)Professions.Conduit);
+            // hack to fix.. something. Recommended by space to avoid errors.
+            if (Game1.endOfNightMenus.Count == 0)
+                Game1.endOfNightMenus.Push(new SaveGameMenu());
+            
+            bool playerNeedsLevelFiveProfession = GetAlchemyLevel() >= 5 && !Game1.player.professions.Contains((int)Professions.Shaper) && !Game1.player.professions.Contains((int)Professions.Sage);
+            bool playerNeedsLevelTenProfession = GetAlchemyLevel() >= 10 && !Game1.player.professions.Contains((int)Professions.Transmuter) && !Game1.player.professions.Contains((int)Professions.Adept) && !Game1.player.professions.Contains((int)Professions.Aurumancer) && !Game1.player.professions.Contains((int)Professions.Conduit);
             bool playerGainedALevel = showLevelUpMenusByRank.Count() > 0;
 
-            //nothing requires our intervention, bypass this method as it is heavy on logic and predecate searches, and we don't want to fire those every #&!$ing tick
+            //nothing requires our intervention, bypass this method
             if (!playerGainedALevel && !playerNeedsLevelFiveProfession && !playerNeedsLevelTenProfession)
                 return;
 
@@ -440,8 +485,6 @@ namespace EquivalentExchange
                     }
                 }
             }
-
-            //Log.debug($"{LocalizationStrings.Get(LocalizationStrings.LeylineDistanceOnMapTransitionsNow)} {DistanceCalculator.GetPathDistance(Game1.player.currentLocation)}");
         }
 
         //hooked for drawing the experience bar on screen when experience bars mod is present.
@@ -457,9 +500,6 @@ namespace EquivalentExchange
         {
             foreach (string leyline in VANILLA_LEYLINE_LOCATIONS)
             {
-                //if (Game1.getLocationFromName(leyline) == null)
-                //    Log.error($"{leyline} is missing, there is a very bad problem and you will not be going to space today.");
-                //else
                 Game1.getLocationFromName(leyline)?.map.Properties.Add(Alchemy.LEYLINE_PROPERTY_INDICATOR, 0F);
             }
         }
@@ -478,9 +518,6 @@ namespace EquivalentExchange
             // save is loaded
             if (Context.IsWorldReady)
             {
-                // the first thing to do is set this instance's player Id, we use it, all over the place.
-                playerId = Game1.player.uniqueMultiplayerID;
-
                 //fetch the alchemy save for this game file.
                 instance.currentPlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{Game1.uniqueIDForThisGame.ToString()}.json"));
 
