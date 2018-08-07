@@ -59,9 +59,9 @@ namespace EquivalentExchange
         }
 
         //how much experience is needed to reach next level
-        public static int GetAlchemyExperienceNeededForNextLevel()
+        public static int GetAlchemyExperienceNeededForNextLevel(int alchemyLevel)
         {
-            return GetAlchemyExperienceNeededForLevel(EquivalentExchange.GetAlchemyLevel() + 1);
+            return GetAlchemyExperienceNeededForLevel(alchemyLevel + 1);
         }
 
         //get the coefficient for stamina drain
@@ -75,7 +75,7 @@ namespace EquivalentExchange
         public static double GetAlchemyEnergyCostSkillMultiplier()
         {
             //base of 1 - 0.075 per skill level - profession modifiers
-            return GetAlchemyEnergyCostSkillMultiplierForLevel(EquivalentExchange.GetAlchemyLevel());
+            return GetAlchemyEnergyCostSkillMultiplierForLevel(EquivalentExchange.AlchemyLevel);
         }
 
         //algorithm to return stamina cost for the act of transmuting/liquidating an item, based on player skill and item value
@@ -87,13 +87,13 @@ namespace EquivalentExchange
         //get the coefficient for item sell value
         public static double GetLiquidationValuePercentage()
         {
-            return GetLiquidationValuePercentage(EquivalentExchange.GetAlchemyLevel());
+            return GetLiquidationValuePercentage(EquivalentExchange.AlchemyLevel);
         }
 
         //get the coefficient for item price for transmutation
         public static double GetTransmutationMarkupPercentage()
         {
-            return GetTransmutationMarkupPercentage(EquivalentExchange.GetAlchemyLevel());
+            return GetTransmutationMarkupPercentage(EquivalentExchange.AlchemyLevel);
         }
 
         //the chance a player will fail to transmute/liquidate an item
@@ -109,7 +109,7 @@ namespace EquivalentExchange
             }
 
             //the distance factor is whatever the raw distance is minus the player's alchemy level, which reduces the impact of distance from leylines to rebounds
-            double distanceFactor = Math.Max(0D, distance - EquivalentExchange.GetAlchemyLevel());
+            double distanceFactor = Math.Max(0D, distance - EquivalentExchange.AlchemyLevel);
 
             //normalize distance factor - each map adds roughly 5% rebound, so dividing by 20D is what we're going for.
             distanceFactor *= MAP_DISTANCE_FACTOR;
@@ -198,7 +198,7 @@ namespace EquivalentExchange
 
         public static double GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses()
         {
-            return GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(EquivalentExchange.GetAlchemyLevel(), Game1.player.LuckLevel);
+            return GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(EquivalentExchange.AlchemyLevel, Game1.player.LuckLevel);
         }
 
         //check to see if this is a lucky [free] transmute
@@ -219,7 +219,7 @@ namespace EquivalentExchange
             double remainingStaminaCost = staminaCost;
 
             //if you have any alkahestry energy, it will try to use as much as it can
-            double alkahestryCost = Math.Min(Alchemy.GetCurrentAlkahestryEnergy(), staminaCost);
+            double alkahestryCost = Math.Min(EquivalentExchange.CurrentEnergy, staminaCost);
 
             //and deduct that from whatever stamina cost might be left over (which may be all of it)
             remainingStaminaCost -= alkahestryCost;
@@ -256,7 +256,7 @@ namespace EquivalentExchange
             if (Game1.player.money >= totalCost)
             {
                 //if the player lacks the stamina to execute a transmute, abort
-                if (Game1.player.Stamina - 1F + Alchemy.GetCurrentAlkahestryEnergy() <= staminaCost)
+                if (Game1.player.Stamina - 1F + EquivalentExchange.CurrentEnergy <= staminaCost)
                 {
                     return;
                 }
@@ -336,7 +336,7 @@ namespace EquivalentExchange
             double staminaCost = (isItemWorthLessThanOnePercentOfMoney && Game1.player.professions.Contains(Professions.Conduit)) ? 0D : Alchemy.GetStaminaCostForTransmutation(actualValue);
 
             //if the player lacks the stamina to execute a transmute, abort
-            if (Game1.player.Stamina - 1F + Alchemy.GetCurrentAlkahestryEnergy() <= staminaCost)
+            if (Game1.player.Stamina - 1F + EquivalentExchange.CurrentEnergy <= staminaCost)
             {
                 return;
             }
@@ -397,17 +397,7 @@ namespace EquivalentExchange
                 SoundUtil.PlayReboundSound();
             }
         }
-
-        public static float GetCurrentAlkahestryEnergy()
-        {
-            return EquivalentExchange.GetCurrentAlkahestryEnergy();
-        }
-
-        public static float GetMaxAlkahestryEnergy()
-        {
-            return EquivalentExchange.GetMaxAlkahestryEnergy();
-        }
-
+        
         public static void IncreaseTotalTransmuteValue(int transmuteValue)
         {
             EquivalentExchange.AddTotalValueTransmuted(transmuteValue);
@@ -415,12 +405,12 @@ namespace EquivalentExchange
 
         public static void ReduceAlkahestryEnergy(double energyCost)
         {
-            EquivalentExchange.SetCurrentAlkahestryEnergy(EquivalentExchange.GetCurrentAlkahestryEnergy() -  (float)energyCost);
+            EquivalentExchange.CurrentEnergy -= (float)energyCost;
         }
 
         internal static void RestoreAlkahestryEnergyForNewDay()
         {
-            EquivalentExchange.SetCurrentAlkahestryEnergy(Alchemy.GetMaxAlkahestryEnergy());
+            EquivalentExchange.CurrentEnergy = EquivalentExchange.MaxEnergy;
         }
 
         public static void HandleNormalizeEvent(Item heldItem, int actualValue)
@@ -513,7 +503,7 @@ namespace EquivalentExchange
         {
             if (EquivalentExchange.IsShiftKeyPressed())
                 return 0;
-            return (int)Math.Floor(EquivalentExchange.GetAlchemyLevel() / 3D);
+            return (int)Math.Floor(EquivalentExchange.AlchemyLevel / 3D);
         }
 
         //this was almost entirely stolen from spacechase0 with very little contribution on my part.
@@ -545,7 +535,7 @@ namespace EquivalentExchange
                 {
                     if (!isScythe)
                     {
-                        if (Alchemy.GetCurrentAlkahestryEnergy() + Game1.player.Stamina - (GetToolTransmutationEnergyCost() + 1) <= 0)
+                        if (EquivalentExchange.CurrentEnergy + Game1.player.Stamina - (GetToolTransmutationEnergyCost() + 1) <= 0)
                             return;
                     }
 
@@ -631,7 +621,7 @@ namespace EquivalentExchange
                     {
                         if (location is Farm || location is MineShaft)
                         {
-                            var largeResourceClusters = (List<ResourceClump>)(location.GetType().GetField("resourceClumps", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance).GetValue(location));
+                            var largeResourceClusters = (NetCollection<ResourceClump>)location.GetType().GetField("resourceClumps", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance).GetValue(location);
                             DoLargeResourceClusterAction(largeResourceClusters, tool, offsetPosition, performedAction);
                         } else if (location is Woods) { 
                             var largeResourceClusters = (location as Woods).stumps;

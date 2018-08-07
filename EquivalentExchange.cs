@@ -32,7 +32,7 @@ namespace EquivalentExchange
         public static EquivalentExchange instance;        
 
         // holds the player data for all active players, then uses statics to expose this player's data.
-        public SaveDataModel currentPlayerData;        
+        public SaveDataModel currentPlayerData = new SaveDataModel();        
 
         //config for if the mod is allowed to play sounds
         public static bool canPlaySounds;
@@ -123,82 +123,124 @@ namespace EquivalentExchange
 
         private void SpaceEvents_ServerGotClient(object sender, EventArgsServerGotClient e)
         {
+            // first thing we need to do is check to see if this player exists in player data. If they don't, let's make them a profile.
+            var farmerId = e.FarmerID;
+            if (!PlayerData.AlchemyLevel.ContainsKey(farmerId))
+                PlayerData.AlchemyLevel[farmerId] = 0;
+            if (!PlayerData.AlchemyExperience.ContainsKey(farmerId))
+                PlayerData.AlchemyExperience[farmerId] = 0;
+            if (!PlayerData.AlkahestryCurrentEnergy.ContainsKey(farmerId))
+                PlayerData.AlkahestryCurrentEnergy[farmerId] = 0F;
+            if (!PlayerData.AlkahestryMaxEnergy.ContainsKey(farmerId))
+                PlayerData.AlkahestryMaxEnergy[farmerId] = 0F;
+            if (!PlayerData.TotalValueTransmuted.ContainsKey(farmerId))
+                PlayerData.TotalValueTransmuted[farmerId] = 0;
+
+            Log.debug($"Adding player {farmerId.ToString()} to registry. Keys currently: { PlayerData.AlchemyLevel.Count }");
+
             using (var stream = new MemoryStream())
             using (var writer = new BinaryWriter(stream))
             {
                 // arbitrarily using the first property as the index master, it should be irrelevant, as each should have the same # of keys.
-                writer.Write(currentPlayerData.AlchemyLevel.Count);
-                foreach (var lvl in currentPlayerData.AlchemyLevel)
+                writer.Write(PlayerData.AlchemyLevel.Count);
+                foreach (var lvl in PlayerData.AlchemyLevel)
                 {
                     writer.Write(lvl.Key);
                     writer.Write(lvl.Value);
                 }
                 // we don't need the key beyond this point.
-                foreach (var exp in currentPlayerData.AlchemyExperience)
+                foreach (var exp in PlayerData.AlchemyExperience)
                 {
+                    writer.Write(exp.Key);
                     writer.Write(exp.Value);
                 }
-                foreach (var maxEnergy in currentPlayerData.MaxEnergy)
+                foreach (var maxEnergy in PlayerData.AlkahestryMaxEnergy)
                 {
-                    writer.Write((double)maxEnergy.Value);
+                    writer.Write(maxEnergy.Key);
+                    writer.Write(maxEnergy.Value);
                 }
-                foreach (var currentEnergy in currentPlayerData.CurrentEnergy)
+                foreach (var currentEnergy in PlayerData.AlkahestryCurrentEnergy)
                 {
-                    writer.Write((double)currentEnergy.Value);
+                    writer.Write(currentEnergy.Key);
+                    writer.Write(currentEnergy.Value);
                 }
-                foreach (var totalValue in currentPlayerData.TotalValueTransmuted)
+                foreach (var totalValue in PlayerData.TotalValueTransmuted)
                 {
+                    writer.Write(totalValue.Key);
                     writer.Write(totalValue.Value);
                 }
-
-                var server = (GameServer)sender;
+                
+                Log.debug("Streaming data to joined client.");
                 Networking.ServerSendTo(e.FarmerID, MSG_DATA, stream.ToArray());
             }
         }
 
         private void OnTransmutedValueMessage(IncomingMessage msg)
         {
-            currentPlayerData.TotalValueTransmuted[msg.FarmerID] = msg.Reader.ReadInt32();
+            PlayerData.TotalValueTransmuted[msg.FarmerID] = msg.Reader.ReadInt32();
         }
 
         private void OnMaxEnergyMessage(IncomingMessage msg)
         {
-            currentPlayerData.MaxEnergy[msg.FarmerID] = (float)msg.Reader.ReadDouble();
+            PlayerData.AlkahestryMaxEnergy[msg.FarmerID] = msg.Reader.ReadSingle();
         }
 
         private void OnCurrentEnergyMessage(IncomingMessage msg)
         {
-            currentPlayerData.CurrentEnergy[msg.FarmerID] = (float)msg.Reader.ReadDouble();
+            PlayerData.AlkahestryCurrentEnergy[msg.FarmerID] = msg.Reader.ReadSingle();
         }
 
         private void OnLevelMessage(IncomingMessage msg)
         {
-            currentPlayerData.AlchemyLevel[msg.FarmerID] = msg.Reader.ReadInt32();
+            PlayerData.AlchemyLevel[msg.FarmerID] = msg.Reader.ReadInt32();
         }
 
         private void OnExpMessage(IncomingMessage msg)
         {
-            currentPlayerData.AlchemyExperience[msg.FarmerID] = msg.Reader.ReadInt32();
+            PlayerData.AlchemyExperience[msg.FarmerID] = msg.Reader.ReadInt32();
         }
 
         // unabashedly stolen from spacechase, like all things.
         private void OnDataMessage(IncomingMessage msg)
         {
+            Log.debug("Receiving updated data from server.");
             int count = msg.Reader.ReadInt32();
+
+            Log.debug($"Count of { count }");
+
             for (int i = 0; i < count; ++i)
             {
                 long id = msg.Reader.ReadInt64();
-                // the order of these params matters, it's in the same order as the fields appear in the save data model
                 int level = msg.Reader.ReadInt32();
+                PlayerData.AlchemyLevel[id] = level;
+            }
+
+            for (int i = 0; i < count; ++i)
+            {
+                long id = msg.Reader.ReadInt64();
                 int experience = msg.Reader.ReadInt32();
-                float maxEnergy = (float)msg.Reader.ReadDouble();
-                float currentEnergy = (float)msg.Reader.ReadDouble();
+                PlayerData.AlchemyExperience[id] = experience;
+            }
+
+            for (int i = 0; i < count; ++i)
+            {
+                long id = msg.Reader.ReadInt64();
+                float maxEnergy = msg.Reader.ReadSingle();
+                PlayerData.AlkahestryMaxEnergy[id] = maxEnergy;
+            }
+
+            for (int i = 0; i < count; ++i)
+            {
+                long id = msg.Reader.ReadInt64();
+                float currentEnergy = msg.Reader.ReadSingle();
+                PlayerData.AlkahestryCurrentEnergy[id] = currentEnergy;
+            }
+
+            for (int i = 0; i < count; ++i)
+            {
+                long id = msg.Reader.ReadInt64();
                 int totalValueTransmuted = msg.Reader.ReadInt32();
-                currentPlayerData.AlchemyLevel[id] = level;
-                currentPlayerData.AlchemyExperience[id] = experience;
-                currentPlayerData.MaxEnergy[id] = maxEnergy;
-                currentPlayerData.CurrentEnergy[id] = currentEnergy;
-                currentPlayerData.TotalValueTransmuted[id] = totalValueTransmuted;
+                PlayerData.TotalValueTransmuted[id] = totalValueTransmuted;
             }
         }
         
@@ -207,9 +249,6 @@ namespace EquivalentExchange
         public static int CurrentRegenResolution => CurrentDefaultTickInterval / 100;
         private static void RegenerateAlchemyBarBasedOnLeylineDistance()
         {
-            if (!Context.IsWorldReady)
-                return;
-
             //checking for paused or menuUp doesn't return true for some reason, but this is
             //a reliable way to check to see if the player is in a menu to prevent regen.
             if (Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu != null || !Game1.shouldTimePass())
@@ -222,85 +261,166 @@ namespace EquivalentExchange
             if (timeElapsed > CurrentRegenResolution)
             {
                 double leylineDistance = Math.Min(10D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation));
-                double regenAlchemyBar = Math.Min(10D - Math.Max(0, leylineDistance - GetAlchemyLevel()), 1D) / 10D;
-                regenAlchemyBar *= Alchemy.GetMaxAlkahestryEnergy() / 100D;
-                SetCurrentAlkahestryEnergy((float)Math.Min(Alchemy.GetCurrentAlkahestryEnergy() + Math.Max(0.05D, regenAlchemyBar), Alchemy.GetMaxAlkahestryEnergy()));
+                double regenAlchemyBar = Math.Min(10D - Math.Max(0, leylineDistance - AlchemyLevel), 1D) / 10D;
+                regenAlchemyBar *= MaxEnergy / 100D;
+                CurrentEnergy = (float)Math.Min(CurrentEnergy + Math.Max(0.05D, regenAlchemyBar), MaxEnergy);
                 lastTickTime = currentTime;
             }            
         }
 
-        public static int GetAlchemyExperience()
+        public static SaveDataModel PlayerData
         {
-            return EquivalentExchange.instance.currentPlayerData.AlchemyExperience[GetPlayerId()];
+            get { return EquivalentExchange.instance.currentPlayerData; }
+            set { EquivalentExchange.instance.currentPlayerData = value; }
         }
 
-        public static void SetAlchemyExperience(int exp)
+        public static int AlchemyExperience
         {
-            EquivalentExchange.instance.currentPlayerData.AlchemyExperience[GetPlayerId()] = exp;
+            get {
+                if (!PlayerData.AlchemyExperience.ContainsKey(PlayerId))
+                    return 0;
+                Log.debug($"Current alchemy experience is {PlayerData.AlchemyExperience[PlayerId]}");
+                return PlayerData.AlchemyExperience[PlayerId];
+            }
+            set
+            {
+                if (!PlayerData.AlchemyExperience.ContainsKey(PlayerId) || PlayerData.AlchemyExperience[PlayerId] != value)
+                {
+                    PlayerData.AlchemyExperience[PlayerId] = value;
+                    using (var stream = new MemoryStream())
+                    using (var writer = new BinaryWriter(stream))
+                    {
+                        writer.Write(value);
+                        Networking.BroadcastMessage(MSG_EXPERIENCE, stream.ToArray());
+                    }
+                }
+            }
         }
 
-        public static int GetAlchemyLevel()
+        public static int AlchemyLevel
         {
-            return EquivalentExchange.instance.currentPlayerData.AlchemyLevel[GetPlayerId()];
+            get
+            {
+                if (!PlayerData.AlchemyLevel.ContainsKey(PlayerId))
+                    return 0;
+                Log.debug($"Current alchemy level is {PlayerData.AlchemyLevel[PlayerId]}");
+                return PlayerData.AlchemyLevel[PlayerId];
+            }
+            set
+            {
+                if (!PlayerData.AlchemyLevel.ContainsKey(PlayerId) || PlayerData.AlchemyLevel[PlayerId] != value)
+                {
+                    PlayerData.AlchemyLevel[PlayerId] = value;
+                    using (var stream = new MemoryStream())
+                    using (var writer = new BinaryWriter(stream))
+                    {
+                        writer.Write(value);
+                        Networking.BroadcastMessage(MSG_LEVEL, stream.ToArray());
+                    }
+                }
+            }
         }
 
-        public static void SetAlchemyLevel(int lvl)
+        public static float CurrentEnergy
         {
-            EquivalentExchange.instance.currentPlayerData.AlchemyLevel[GetPlayerId()] = lvl;
+            get
+            {
+                if (!PlayerData.AlkahestryCurrentEnergy.ContainsKey(PlayerId))
+                    return 0F;
+                Log.debug($"Current energy is {PlayerData.AlkahestryCurrentEnergy[PlayerId]}");
+                return PlayerData.AlkahestryCurrentEnergy[PlayerId];
+            }
+            set
+            {
+                if (!PlayerData.AlkahestryCurrentEnergy.ContainsKey(PlayerId) || PlayerData.AlkahestryCurrentEnergy[PlayerId] != value)
+                {
+                    PlayerData.AlkahestryCurrentEnergy[PlayerId] = value;
+                    using (var stream = new MemoryStream())
+                    using (var writer = new BinaryWriter(stream))
+                    {
+                        writer.Write(value);
+                        Networking.BroadcastMessage(MSG_CURRENT_ENERGY, stream.ToArray());
+                    }
+                }
+            }
         }
 
-        public static float GetCurrentAlkahestryEnergy()
+        public static float MaxEnergy
         {
-            return EquivalentExchange.instance.currentPlayerData.CurrentEnergy[GetPlayerId()];
+            get
+            {
+                if (!PlayerData.AlkahestryMaxEnergy.ContainsKey(PlayerId))
+                    return 0F;
+                Log.debug($"Current alchemy max energy is {PlayerData.AlkahestryMaxEnergy[PlayerId]}");
+                return PlayerData.AlkahestryMaxEnergy[PlayerId];
+            }       
+            set
+            {
+                if (!PlayerData.AlkahestryMaxEnergy.ContainsKey(PlayerId) || PlayerData.AlkahestryMaxEnergy[PlayerId] != value)
+                {
+                    PlayerData.AlkahestryMaxEnergy[PlayerId] = value;
+                    using (var stream = new MemoryStream())
+                    using (var writer = new BinaryWriter(stream))
+                    {
+                        writer.Write(value);
+                        Networking.BroadcastMessage(MSG_MAX_ENERGY, stream.ToArray());
+                    }
+                }
+            }
         }
 
-        public static void SetCurrentAlkahestryEnergy(float energy)
+        public static int TotalValueTransmuted
         {
-            EquivalentExchange.instance.currentPlayerData.CurrentEnergy[GetPlayerId()] = energy;
+            get
+            {
+                if (!PlayerData.TotalValueTransmuted.ContainsKey(PlayerId))
+                    return 0;
+                Log.debug($"Current value transmuted is {PlayerData.TotalValueTransmuted[PlayerId]}");
+                return PlayerData.TotalValueTransmuted[PlayerId];
+            }
+            set
+            {
+                if (!PlayerData.TotalValueTransmuted.ContainsKey(PlayerId) || PlayerData.TotalValueTransmuted[PlayerId] != value)
+                {
+                    PlayerData.TotalValueTransmuted[PlayerId] = value;
+                    using (var stream = new MemoryStream())
+                    using (var writer = new BinaryWriter(stream))
+                    {
+                        writer.Write(value);
+                        Networking.BroadcastMessage(MSG_TOTAL_VALUE_TRANSMUTED, stream.ToArray());
+                    }
+                }
+            }
         }
 
-        public static float GetMaxAlkahestryEnergy()
+        public static long PlayerId
         {
-            return EquivalentExchange.instance.currentPlayerData.MaxEnergy[GetPlayerId()];
-        }
-
-        public static void SetMaxAlkahestryEnergy(float energy)
-        {
-            EquivalentExchange.instance.currentPlayerData.MaxEnergy[GetPlayerId()] = energy;
-        }
-
-        public static int GetTotalValueTransmuted()
-        {
-            return EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted[GetPlayerId()];
-        }
-
-        public static void SetTotalValueTransmuted(int value)
-        {
-            EquivalentExchange.instance.currentPlayerData.TotalValueTransmuted[GetPlayerId()] = value;
-        }
-
-        public static long GetPlayerId()
-        {
-            return Game1.player.uniqueMultiplayerID;
+            get { return Game1.player.uniqueMultiplayerID; }
         }
 
         public static void AddTotalValueTransmuted(int value)
         {
-            SetTotalValueTransmuted(GetTotalValueTransmuted() + value);
-            var updatedMaxEnergy = (int)Math.Floor(Math.Sqrt(GetTotalValueTransmuted()));
-            EquivalentExchange.SetMaxAlkahestryEnergy(updatedMaxEnergy);
+            TotalValueTransmuted += value;
+            var updatedMaxEnergy = (int)Math.Floor(Math.Sqrt(TotalValueTransmuted));
+            MaxEnergy = updatedMaxEnergy;
         }
 
         public static void AddAlchemyExperience(int exp)
         {
-            SetAlchemyExperience(GetAlchemyExperience() + exp);
-
-            while (GetAlchemyLevel() < 10 && GetAlchemyExperience() >= Alchemy.GetAlchemyExperienceNeededForNextLevel())
+            AlchemyExperience += exp;
+            var originalAlchemyLevel = AlchemyLevel;
+            var resultAlchemyLevel = AlchemyLevel;
+            while (resultAlchemyLevel < 10 && AlchemyExperience >= Alchemy.GetAlchemyExperienceNeededForNextLevel(resultAlchemyLevel))
             {
-                SetAlchemyLevel(GetAlchemyLevel() + 1);
+                resultAlchemyLevel += 1;
 
                 //player gained a skilllevel, flag the night time skill up to appear.
-                EquivalentExchange.instance.AddSkillUpMenuAppearance(GetAlchemyLevel());
+                EquivalentExchange.instance.AddSkillUpMenuAppearance(resultAlchemyLevel);
+            }
+
+            if (originalAlchemyLevel != resultAlchemyLevel)
+            {
+                AlchemyLevel = resultAlchemyLevel;
             }
         }
 
@@ -387,15 +507,14 @@ namespace EquivalentExchange
 
         private void GameEvents_UpdateTick(object sender, EventArgs e)
         {
+            if (!Context.IsWorldReady)
+                return;
             RegenerateAlchemyBarBasedOnLeylineDistance();
             HandleHeldTransmuteKeysUpdateTick();
         }
 
         private void HandleHeldTransmuteKeysUpdateTick()
         {
-            if (!Context.IsWorldReady)
-                return;
-
             if (transmuteKeyHeld)
             {
                 heldCounter++;
@@ -424,8 +543,8 @@ namespace EquivalentExchange
             if (Game1.endOfNightMenus.Count == 0)
                 Game1.endOfNightMenus.Push(new SaveGameMenu());
             
-            bool playerNeedsLevelFiveProfession = GetAlchemyLevel() >= 5 && !Game1.player.professions.Contains((int)Professions.Shaper) && !Game1.player.professions.Contains((int)Professions.Sage);
-            bool playerNeedsLevelTenProfession = GetAlchemyLevel() >= 10 && !Game1.player.professions.Contains((int)Professions.Transmuter) && !Game1.player.professions.Contains((int)Professions.Adept) && !Game1.player.professions.Contains((int)Professions.Aurumancer) && !Game1.player.professions.Contains((int)Professions.Conduit);
+            bool playerNeedsLevelFiveProfession = AlchemyLevel >= 5 && !Game1.player.professions.Contains((int)Professions.Shaper) && !Game1.player.professions.Contains((int)Professions.Sage);
+            bool playerNeedsLevelTenProfession = AlchemyLevel >= 10 && !Game1.player.professions.Contains((int)Professions.Transmuter) && !Game1.player.professions.Contains((int)Professions.Adept) && !Game1.player.professions.Contains((int)Professions.Aurumancer) && !Game1.player.professions.Contains((int)Professions.Conduit);
             bool playerGainedALevel = showLevelUpMenusByRank.Count() > 0;
 
             //nothing requires our intervention, bypass this method
@@ -519,13 +638,21 @@ namespace EquivalentExchange
             if (Context.IsWorldReady)
             {
                 //fetch the alchemy save for this game file.
-                instance.currentPlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{Game1.uniqueIDForThisGame.ToString()}.json"));
+                if (!Game1.IsMultiplayer || Game1.IsMasterGame)
+                    PlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{Game1.uniqueIDForThisGame.ToString()}.json")) ?? new SaveDataModel();
 
-                //we want to generate the save data model, but we don't save it until we're supposed to, to prevent data from saving prematurely (thus generating a new multiplayer ID)
-                if (instance.currentPlayerData == null)
-                {
-                    instance.currentPlayerData = new SaveDataModel(Game1.uniqueIDForThisGame);
-                }
+                // if we are the player/host and we don't have a profile, let's make one for ourselves.
+                var farmerId = Game1.player.uniqueMultiplayerID;
+                if (!PlayerData.AlchemyLevel.ContainsKey(farmerId))
+                    PlayerData.AlchemyLevel[farmerId] = 0;
+                if (!PlayerData.AlchemyExperience.ContainsKey(farmerId))
+                    PlayerData.AlchemyExperience[farmerId] = 0;
+                if (!PlayerData.AlkahestryCurrentEnergy.ContainsKey(farmerId))
+                    PlayerData.AlkahestryCurrentEnergy[farmerId] = 0F;
+                if (!PlayerData.AlkahestryMaxEnergy.ContainsKey(farmerId))
+                    PlayerData.AlkahestryMaxEnergy[farmerId] = 0F;
+                if (!PlayerData.TotalValueTransmuted.ContainsKey(farmerId))
+                    PlayerData.TotalValueTransmuted[farmerId] = 0;
             }
         }
 
@@ -537,7 +664,8 @@ namespace EquivalentExchange
 
         private void SavePlayerData()
         {
-            instance.eeHelper.WriteJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{ Game1.uniqueIDForThisGame.ToString()}.json"), instance.currentPlayerData);
+            if (!Game1.IsMultiplayer || Game1.IsMasterGame)
+                instance.eeHelper.WriteJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{ Game1.uniqueIDForThisGame.ToString()}.json"), PlayerData);
         }
 
         /// <summary>Update the mod's config.json file from the current <see cref="Config"/>.</summary>
@@ -803,10 +931,10 @@ namespace EquivalentExchange
             Vector2 alchemyBarPosition = new Vector2(alchemyBarPositionX, alchemyBarPositionY);
 
             Game1.spriteBatch.Draw(DrawingUtil.alchemyBarSprite, alchemyBarPosition, new Rectangle(0, 0, DrawingUtil.alchemyBarSprite.Width, DrawingUtil.alchemyBarSprite.Height), Color.White, 0, new Vector2(), scale, SpriteEffects.None, 1);
-            if (Alchemy.GetCurrentAlkahestryEnergy() > 0)
+            if (CurrentEnergy > 0)
             {
                 Rectangle targetArea = new Rectangle(3, 13, 6, 41);
-                float perc = Alchemy.GetCurrentAlkahestryEnergy() / (float)Alchemy.GetMaxAlkahestryEnergy();
+                float perc = CurrentEnergy / MaxEnergy;
                 int h = (int)(targetArea.Height * perc);
                 targetArea.Y += targetArea.Height - h;
                 targetArea.Height = h;
@@ -824,7 +952,7 @@ namespace EquivalentExchange
                 //perform hover over manually
                 if (Game1.getMouseX() >= alchemyBarPositionX && Game1.getMouseX() <= alchemyBarMaxX && Game1.getMouseY() >= alchemyBarPositionY && Game1.getMouseY() <= alchemyBarMaxY)
                 {
-                    string alkahestryEnergyString = $"{ ((int)Math.Floor(Alchemy.GetCurrentAlkahestryEnergy())).ToString()}/{ Alchemy.GetMaxAlkahestryEnergy().ToString()}";
+                    string alkahestryEnergyString = $"{ ((int)Math.Floor(CurrentEnergy)).ToString()}/{ MaxEnergy.ToString()}";
                     float stringWidth = Game1.dialogueFont.MeasureString(alkahestryEnergyString).X;
                     Vector2 alkahestryEnergyStringPosition = new Vector2(alchemyBarPosition.X - stringWidth - 32, alchemyBarPosition.Y + 64);
                     Game1.spriteBatch.DrawString(Game1.dialogueFont, alkahestryEnergyString, alkahestryEnergyStringPosition, Color.White);

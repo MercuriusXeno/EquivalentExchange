@@ -20,15 +20,15 @@ namespace EquivalentExchange
 
             Type t = Type.GetType("ExperienceBars.Mod, ExperienceBars");
 
-            int currentAlchemyLevel = EquivalentExchange.instance.currentPlayerData.AlchemyLevel;
-            int currentAlchemyExperience = EquivalentExchange.instance.currentPlayerData.AlchemyExperience;
+            int currentAlchemyLevel = EquivalentExchange.AlchemyLevel;
+            int currentAlchemyExperience = EquivalentExchange.AlchemyExperience;
             int x = 10;
             int y = (int)Util.GetStaticField(t, "expBottom");
 
             int previousExperienceRequired = 0, nextExperienceRequired = 1;
             if (currentAlchemyLevel == 0)
             {
-                nextExperienceRequired = Alchemy.GetAlchemyExperienceNeededForNextLevel();
+                nextExperienceRequired = Alchemy.GetAlchemyExperienceNeededForNextLevel(currentAlchemyLevel);
             }
             else if (currentAlchemyLevel != 10)
             {
