@@ -13,11 +13,11 @@ namespace EquivalentExchange
     public class Alchemy
     {
         //constants for storing some important formula values as non-magic numbers, this is the impact level ups and other factors have on formulas, stored in constants for easy edits.
-        //public const double TRANSMUTATION_BONUS_PER_LEVEL = 0.2D;
-        //public const double LIQUIDATION_BONUS_PER_LEVEL = 0.02D;
+        public const double TRANSMUTATION_BONUS_PER_LEVEL = 0.15D;
+        public const double LIQUIDATION_BONUS_PER_LEVEL = 0.03D;
         public const double SKILL_STAMINA_DRAIN_IMPACT_PER_LEVEL = 0.08D;
-        //public const double BASE_VALUE_COEFFICIENT = 0.8D;
-        //public const double BASE_COST_COEFFICIENT = 3D;
+        public const double BASE_VALUE_COEFFICIENT = 0.8D;
+        public const double BASE_COST_COEFFICIENT = 4D;
         public const double LUCK_REBOUND_IMPACT = 0.01D;
         public const double BASE_REBOUND_RATE = 0.05D;
         public const double SHAPER_DAILY_LUCK_BONUS = 2D;
@@ -122,9 +122,9 @@ namespace EquivalentExchange
 
         internal static double GetTransmutationMarkupPercentage(int whichLevel)
         {
-            //base of 3.0 - 0.1 per skill level - profession modifiers
-            return 2.0D;
-            //return BASE_COST_COEFFICIENT - (TRANSMUTATION_BONUS_PER_LEVEL * whichLevel);
+            //base of 4.0 - 0.15 per skill level - profession modifiers
+            // return 2.0D;
+            return BASE_COST_COEFFICIENT - (TRANSMUTATION_BONUS_PER_LEVEL * whichLevel);
         }
 
         internal static double GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(int whichLevel, int luckLevel)
@@ -135,8 +135,8 @@ namespace EquivalentExchange
         internal static double GetLiquidationValuePercentage(int whichLevel)
         {
             //base of 0.5 + 0.03 per skill level + profession modifiers
-            return 1.0D;
-            //return BASE_VALUE_COEFFICIENT + (LIQUIDATION_BONUS_PER_LEVEL * whichLevel);
+            //return 1.0D;
+            return BASE_VALUE_COEFFICIENT + (LIQUIDATION_BONUS_PER_LEVEL * whichLevel);
         }
 
         //check if the player failed a rebound check

@@ -133,7 +133,7 @@ namespace EquivalentExchange
             foreach (ClickableTextureComponent skillBar in this.skillBars)
             {
                 skillBar.scale = (float)Game1.pixelZoom;
-                if (skillBar.containsPoint(x, y) && skillBar.hoverText.Length > 0 && !skillBar.name.Equals("-1"))
+                if (skillBar.containsPoint(x, y) && !skillBar.name.Equals("-1") && skillBar.hoverText.Length > 0)
                 {
                     this.hoverText = Professions.GetProfessionDescription(Convert.ToInt32(skillBar.name));
                     this.hoverTitle = Professions.GetProfessionTitleFromNumber(Convert.ToInt32(skillBar.name));

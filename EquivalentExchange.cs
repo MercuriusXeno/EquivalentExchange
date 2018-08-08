@@ -136,7 +136,7 @@ namespace EquivalentExchange
             if (!PlayerData.TotalValueTransmuted.ContainsKey(farmerId))
                 PlayerData.TotalValueTransmuted[farmerId] = 0;
 
-            Log.debug($"Adding player {farmerId.ToString()} to registry. Keys currently: { PlayerData.AlchemyLevel.Count }");
+            // Log.debug($"Adding player {farmerId.ToString()} to registry. Keys currently: { PlayerData.AlchemyLevel.Count }");
 
             using (var stream = new MemoryStream())
             using (var writer = new BinaryWriter(stream))
@@ -170,7 +170,7 @@ namespace EquivalentExchange
                     writer.Write(totalValue.Value);
                 }
                 
-                Log.debug("Streaming data to joined client.");
+                // Log.debug("Streaming data to joined client.");
                 Networking.ServerSendTo(e.FarmerID, MSG_DATA, stream.ToArray());
             }
         }
@@ -203,10 +203,10 @@ namespace EquivalentExchange
         // unabashedly stolen from spacechase, like all things.
         private void OnDataMessage(IncomingMessage msg)
         {
-            Log.debug("Receiving updated data from server.");
+            // Log.debug("Receiving updated data from server.");
             int count = msg.Reader.ReadInt32();
 
-            Log.debug($"Count of { count }");
+            // Log.debug($"Count of { count }");
 
             for (int i = 0; i < count; ++i)
             {
@@ -279,7 +279,7 @@ namespace EquivalentExchange
             get {
                 if (!PlayerData.AlchemyExperience.ContainsKey(PlayerId))
                     return 0;
-                Log.debug($"Current alchemy experience is {PlayerData.AlchemyExperience[PlayerId]}");
+                // Log.debug($"Current alchemy experience is {PlayerData.AlchemyExperience[PlayerId]}");
                 return PlayerData.AlchemyExperience[PlayerId];
             }
             set
@@ -303,7 +303,7 @@ namespace EquivalentExchange
             {
                 if (!PlayerData.AlchemyLevel.ContainsKey(PlayerId))
                     return 0;
-                Log.debug($"Current alchemy level is {PlayerData.AlchemyLevel[PlayerId]}");
+                // Log.debug($"Current alchemy level is {PlayerData.AlchemyLevel[PlayerId]}");
                 return PlayerData.AlchemyLevel[PlayerId];
             }
             set
@@ -327,7 +327,7 @@ namespace EquivalentExchange
             {
                 if (!PlayerData.AlkahestryCurrentEnergy.ContainsKey(PlayerId))
                     return 0F;
-                Log.debug($"Current energy is {PlayerData.AlkahestryCurrentEnergy[PlayerId]}");
+                // Log.debug($"Current energy is {PlayerData.AlkahestryCurrentEnergy[PlayerId]}");
                 return PlayerData.AlkahestryCurrentEnergy[PlayerId];
             }
             set
@@ -351,7 +351,7 @@ namespace EquivalentExchange
             {
                 if (!PlayerData.AlkahestryMaxEnergy.ContainsKey(PlayerId))
                     return 0F;
-                Log.debug($"Current alchemy max energy is {PlayerData.AlkahestryMaxEnergy[PlayerId]}");
+                // Log.debug($"Current alchemy max energy is {PlayerData.AlkahestryMaxEnergy[PlayerId]}");
                 return PlayerData.AlkahestryMaxEnergy[PlayerId];
             }       
             set
@@ -375,7 +375,7 @@ namespace EquivalentExchange
             {
                 if (!PlayerData.TotalValueTransmuted.ContainsKey(PlayerId))
                     return 0;
-                Log.debug($"Current value transmuted is {PlayerData.TotalValueTransmuted[PlayerId]}");
+                // Log.debug($"Current value transmuted is {PlayerData.TotalValueTransmuted[PlayerId]}");
                 return PlayerData.TotalValueTransmuted[PlayerId];
             }
             set
@@ -401,7 +401,8 @@ namespace EquivalentExchange
         public static void AddTotalValueTransmuted(int value)
         {
             TotalValueTransmuted += value;
-            var updatedMaxEnergy = (int)Math.Floor(Math.Sqrt(TotalValueTransmuted));
+            // Extremely nerfed formula for alchemy energy training.
+            var updatedMaxEnergy = (int)Math.Floor(Math.Sqrt(Math.Sqrt(TotalValueTransmuted / 10)));
             MaxEnergy = updatedMaxEnergy;
         }
 
@@ -708,7 +709,7 @@ namespace EquivalentExchange
                     int heldItemID = heldItem.parentSheetIndex;
 
                     //get the transmutation value, it's based on what it's worth to the player, including profession bonuses. This affects both cost and value.
-                    int actualValue = ((StardewValley.Object)heldItem).sellToStorePrice();
+                    int actualValue = ((StardewValley.Object)heldItem).sellToStorePrice();                    
                     int liquidateValue = (int)Math.Floor(Alchemy.GetLiquidationValuePercentage() * actualValue);
                     float staminaDrain = (float)Math.Round(Alchemy.GetStaminaCostForTransmutation(actualValue), 2);
                     float luckyChance = (float)Math.Round(Alchemy.GetLuckyTransmuteChance() * 100, 2);
