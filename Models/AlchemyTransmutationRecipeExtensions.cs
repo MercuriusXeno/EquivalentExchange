@@ -21,12 +21,7 @@ namespace EquivalentExchange.Models
         {
             var filteredRecipes = recipes.Where(x => x.OutputId == output).ToList();
             filteredRecipes.Sort((x, y) => {
-                var comp = Util.GetItemValue(x.InputId) - Util.GetItemValue(y.InputId);
-                // if the cost of the transmutation is higher, it's a slime recipe. Negate the value.
-                if (comp < 0 && x.Cost > 1)
-                {
-                    comp = -comp;
-                }                
+                var comp = Util.GetItemValue(x.InputId) - Util.GetItemValue(y.InputId);            
                 return comp;
             });
             return filteredRecipes;
@@ -38,9 +33,9 @@ namespace EquivalentExchange.Models
             {
                 var input = recipe.InputId;
                 var cost = recipe.GetInputCost();
-                if (farmer.hasItemInInventory(input, recipe.GetInputCost()))
+                if (farmer.hasItemInInventory(input, recipe.GetInputCost() + 1))
                 {
-                    if (EquivalentExchange.CurrentEnergy >= recipe.Cost)
+                    if (EquivalentExchange.CurrentEnergy + (Math.Max(0, farmer.stamina - 1)) >= recipe.GetEnergyCost())
                     {
                         return recipe;
                     }

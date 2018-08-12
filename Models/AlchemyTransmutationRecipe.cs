@@ -16,13 +16,18 @@ namespace EquivalentExchange.Models
         /// <summary>
         ///     The cost of performing this recipe, typically 1 unless a profession enables a special input/output.
         /// </summary>
-        public int Cost { get; set; }
+        public double CostCoefficient { get; set; }
         
-        public AlchemyTransmutationRecipe(int input, int output, int cost)
+        public AlchemyTransmutationRecipe(int input, int output, double costCoefficient = 1D)
         {
             InputId = input;
             OutputId = output;
-            Cost = cost;
+            CostCoefficient = costCoefficient;
+        }
+
+        public double GetEnergyCost()
+        {
+            return this.CostCoefficient * (this.GetInputCost() * Util.GetItemValue(this.InputId)) / 10D;
         }
 
         public int GetInputCost()

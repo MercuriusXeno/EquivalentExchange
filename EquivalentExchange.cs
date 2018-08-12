@@ -714,7 +714,7 @@ namespace EquivalentExchange
                 var inputValue = Util.GetItemValue(recipe.InputId);
                 var outputName = Util.GetItemName(recipe.OutputId);
                 var outputValue = Util.GetItemValue(recipe.OutputId);
-                Log.debug($"Transmute: {recipe.GetInputCost()} {inputName} ({inputValue}) into {recipe.GetOutputQuantity()} {outputName} ({outputValue}), costs {recipe.Cost}");
+                //Log.debug($"Transmute: {recipe.GetInputCost()} {inputName} ({inputValue}) into {recipe.GetOutputQuantity()} {outputName} ({outputValue}), costs {recipe.Cost}");
             }
             return recipes;
         }       

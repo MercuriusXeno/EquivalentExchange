@@ -46,16 +46,16 @@ namespace EquivalentExchange
         }
 
         //handles draining energy/stamina on successful transmute
-        public static void HandleAlchemyEnergyDeduction(int energyCost, bool isForcedStaminaDrain)
+        public static void HandleAlchemyEnergyDeduction(double energyCost, bool isForcedStaminaDrain)
         {
-            int remainingStaminaCost = energyCost;
+            double remainingStaminaCost = energyCost;
 
             // if the stamina drain is "forced" it means you can't pay for this transaction with energy
             // the *entire* cost goes to stamina.
             if (!isForcedStaminaDrain)
             {
                 //if you have any alkahestry energy, it will try to use as much as it can
-                int alkahestryCost = (int)Math.Min(EquivalentExchange.CurrentEnergy, energyCost);
+                double alkahestryCost = (double)Math.Min(EquivalentExchange.CurrentEnergy, energyCost);
 
                 //and deduct that from whatever stamina cost might be left over (which may be all of it)
                 remainingStaminaCost -= alkahestryCost;
@@ -90,11 +90,11 @@ namespace EquivalentExchange
                 return;
             }
 
-            Alchemy.HandleAlchemyEnergyDeduction(optimalRecipe.Cost, false);
+            Alchemy.HandleAlchemyEnergyDeduction(optimalRecipe.GetEnergyCost(), false);
             
             Alchemy.IncreaseTotalTransmuteValue(1);
                         
-            Util.TakeItemFromPlayer(optimalRecipe.InputId, optimalRecipe.Cost, Game1.player);
+            Util.TakeItemFromPlayer(optimalRecipe.InputId, optimalRecipe.GetInputCost(), Game1.player);
 
             Item spawnedItem = heldItem.getOne();
             spawnedItem.Stack = optimalRecipe.GetOutputQuantity();
@@ -601,15 +601,15 @@ namespace EquivalentExchange
             });
         }
 
-        private static int GetToolTransmutationEnergyCost(int level)
+        private static double GetToolTransmutationEnergyCost(double level)
         {
-            int increase = (int)Math.Floor(level / 2D);
+            double increase = Math.Floor(level / 2D);
             return ENERGY_COST_OF_TOOL_TRANSMUTES + increase;
         }
 
-        private static int GetToolTransmutationStaminaCost(int level)
+        private static double GetToolTransmutationStaminaCost(double level)
         {
-            int reduction = (int)Math.Floor(level / 2D);
+            double reduction = Math.Floor(level / 2D);
             return STAMINA_COST_OF_TOOL_TRANSMUTES - reduction;
         }
 
