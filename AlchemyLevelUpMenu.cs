@@ -82,12 +82,12 @@ namespace EquivalentExchange
             this.currentLevel = level;
             this.title = string.Concat(new object[]
             {
-                $"{LocalizationStrings.Get(LocalizationStrings.Level)} ",
+                $"{EquivalentExchange.instance.Helper.Translation.Get("Level")} ",
                 this.currentLevel,
-                $" {LocalizationStrings.Get(LocalizationStrings.Alchemy)}"
+                $" {EquivalentExchange.instance.Helper.Translation.Get("Alchemy")}"
             });
             
-            this.extraInfoForLevel = this.GetExtraInfoForLevel(this.currentLevel, Game1.player.luckLevel);
+            this.extraInfoForLevel = this.GetExtraInfoForLevel(this.currentLevel);
             sourceRectForLevelIcon = new Rectangle(0, 0, 16, 16);
             if (this.currentLevel > 0 && this.currentLevel % 5 == 0)
             {
@@ -117,6 +117,19 @@ namespace EquivalentExchange
             this.gameWindowSizeChanged(Rectangle.Empty, Rectangle.Empty);
         }
 
+        public List<string> GetExtraInfoForLevel(int level)
+        {
+            var infoList = new List<string>
+            {
+                EquivalentExchange.instance.Helper.Translation.Get("LevelUp")
+            };
+            if (level % 2 == 0)
+            {
+                infoList.Add(EquivalentExchange.instance.Helper.Translation.Get("LevelUpEven"));
+            }
+            return infoList;
+        }
+
         public override void gameWindowSizeChanged(Rectangle oldBounds, Rectangle newBounds)
         {
             this.xPositionOnScreen = Game1.viewport.Width / 2 - this.width / 2;
@@ -126,24 +139,7 @@ namespace EquivalentExchange
 
         public override void receiveLeftClick(int x, int y, bool playSound = true)
         {
-        }
-
-        public List<string> GetExtraInfoForLevel(int whichLevel, int luckLevel)
-        {
-            //double nextCoefficientCost = (Alchemy.GetTransmutationMarkupPercentage(whichLevel) - Alchemy.TRANSMUTATION_BONUS_PER_LEVEL) * 100D;
-            //double nextCoefficientValue = (Alchemy.GetLiquidationValuePercentage(whichLevel) + Alchemy.LIQUIDATION_BONUS_PER_LEVEL) * 100D;
-            //string coefficientCost = $"Cost: {nextCoefficientCost.ToString()}% Value: {nextCoefficientValue.ToString()}%";
-            double luckyTransmuteMinimum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + 0.01) * 100);
-            double luckyTransmuteMaximum = ((Alchemy.GetLuckyTransmuteChanceWithoutDailyOrProfessionBonuses(whichLevel, luckLevel) + Alchemy.LUCK_NORMALIZATION_FOR_FREE_TRANSMUTES) * 100);
-
-            string luckyTransmuteChance = $"{LocalizationStrings.Get(LocalizationStrings.LuckyTransmute)} {luckyTransmuteMinimum.ToString()}-{luckyTransmuteMaximum.ToString()}% {LocalizationStrings.Get(LocalizationStrings.StaminaDrain)} -{ ((1 - Alchemy.GetAlchemyEnergyCostSkillMultiplierForLevel(whichLevel)) * 100).ToString() }%";
-            string distanceFromTowerImpact = $"{LocalizationStrings.Get(LocalizationStrings.LeylineDistanceNegatedBy)} { (whichLevel) }.";            
-            List<string> extraInfoList = new List<string>();
-            //extraInfoList.Add(coefficientCost);
-            extraInfoList.Add(luckyTransmuteChance);
-            extraInfoList.Add(distanceFromTowerImpact);
-            return extraInfoList;
-        }
+        }        
         
         public static List<string> getProfessionDescription(int whichProfession)
         {
@@ -159,17 +155,17 @@ namespace EquivalentExchange
             switch (whichProfession)
             {
                 case Professions.Shaper:
-                    return $"{LocalizationStrings.Get(LocalizationStrings.Shaper)}";
+                    return $"{EquivalentExchange.instance.Helper.Translation.Get("Shaper")}";
                 case Professions.Sage:
-                    return $"{LocalizationStrings.Get(LocalizationStrings.Sage)}";
+                    return $"{EquivalentExchange.instance.Helper.Translation.Get("Sage")}";
                 case Professions.Transmuter:
-                    return $"{LocalizationStrings.Get(LocalizationStrings.Transmuter)}";
+                    return $"{EquivalentExchange.instance.Helper.Translation.Get("Transmuter")}";
                 case Professions.Adept:
-                    return $"{LocalizationStrings.Get(LocalizationStrings.Adept)}";
+                    return $"{EquivalentExchange.instance.Helper.Translation.Get("Adept")}";
                 case Professions.Aurumancer:
-                    return $"{LocalizationStrings.Get(LocalizationStrings.Aurumancer)}";
+                    return $"{EquivalentExchange.instance.Helper.Translation.Get("Aurumancer")}";
                 case Professions.Conduit:
-                    return $"{LocalizationStrings.Get(LocalizationStrings.Conduit)}";
+                    return $"{EquivalentExchange.instance.Helper.Translation.Get("Conduit")}";
             }
 
             return null;
@@ -314,7 +310,7 @@ namespace EquivalentExchange
                     Utility.drawWithShadow(b, DrawingUtil.alchemySkillIconBordered, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + IClickableMenu.borderWidth), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), this.sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom, false, 0.88f, -1, -1, 0.35f);
                     b.DrawString(Game1.dialogueFont, this.title, new Vector2((float)(this.xPositionOnScreen + this.width / 2) - Game1.dialogueFont.MeasureString(this.title).X / 2f, (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), Game1.textColor);
                     Utility.drawWithShadow(b, DrawingUtil.alchemySkillIconBordered, new Vector2((float)(this.xPositionOnScreen + this.width - IClickableMenu.spaceToClearSideBorder - IClickableMenu.borderWidth - Game1.tileSize), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize / 4)), this.sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, (float)Game1.pixelZoom, false, 0.88f, -1, -1, 0.35f);
-                    b.DrawString(Game1.smallFont, $"{LocalizationStrings.Get(LocalizationStrings.ChooseAProfession)}", new Vector2((float)(this.xPositionOnScreen + this.width / 2) - Game1.smallFont.MeasureString($"{LocalizationStrings.Get(LocalizationStrings.ChooseAProfession)}").X / 2f, (float)(this.yPositionOnScreen + Game1.tileSize + IClickableMenu.spaceToClearTopBorder)), Game1.textColor);
+                    b.DrawString(Game1.smallFont, $"{EquivalentExchange.instance.Helper.Translation.Get("ChooseAProfession")}", new Vector2((float)(this.xPositionOnScreen + this.width / 2) - Game1.smallFont.MeasureString($"{EquivalentExchange.instance.Helper.Translation.Get("ChooseAProfession")}").X / 2f, (float)(this.yPositionOnScreen + Game1.tileSize + IClickableMenu.spaceToClearTopBorder)), Game1.textColor);
                     b.DrawString(Game1.dialogueFont, this.leftProfessionDescription[0], new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + Game1.tileSize / 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2)), this.leftProfessionColor);
                     Texture2D textureA = DrawingUtil.GetProfessionTexture(professionsToChoose[0]);
                     b.Draw(textureA, new Vector2((float)(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + 24 + this.width / 2 - Game1.tileSize * 2), (float)(this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + Game1.tileSize * 5 / 2 - Game1.tileSize / 4)), sourceRectForLevelIcon, Color.White, 0f, Vector2.Zero, 4f, SpriteEffects.None, 1f);

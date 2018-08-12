@@ -184,7 +184,63 @@ namespace EquivalentExchange
                     Log.error($"Exception while handling event {name}:\n{e}");
                 }
             }
-        }        
+        }
+
+        public static int GreatestCommonFactor(int a, int b)
+        {
+            while (b != 0)
+            {
+                int temp = b;
+                b = a % b;
+                a = temp;
+            }
+            return a;
+        }
+
+        public static int LowestCommonDenominator(int a, int b)
+        {
+            return (a / GreatestCommonFactor(a, b)) * b;
+        }
+
+        public static int GetItemValue(int itemId)
+        {            
+            var o = new StardewValley.Object(itemId, 1);
+            return o.sellToStorePrice();
+        }
+
+        public static string GetItemName(int itemId)
+        {
+            var o = new StardewValley.Object(itemId, 1);
+            return o.name;
+        }
+
+        public static void GiveItemToPlayer(Item item, Farmer player) {
+            if (player.couldInventoryAcceptThisItem(item))
+            {
+                player.addItemToInventory(item);
+            }
+            else
+            {
+                Game1.createItemDebris(item, player.getStandingPosition(), player.FacingDirection, player.currentLocation);
+            }
+        }
+        
+        public static void TakeItemFromPlayer(int itemId, int quantity, Farmer player)
+        {
+            while (quantity > 0)
+            {
+                player.removeFirstOfThisItemFromInventory(itemId);
+                --quantity;
+            }
+        }
+
+        // function used for two things: returns the number of transmutes the player can get off of one slime
+        // also the radius at which tool transmutes work. Designed to max out at 4.
+        public static int GetAlchemyPowerLevel(int playerAlchemyLevel)
+        {
+            var modifiedLevel = Math.Max(1, playerAlchemyLevel * 1.6F);
+            return (int)Math.Floor(Math.Sqrt(modifiedLevel));
+        }
     }
 }
 

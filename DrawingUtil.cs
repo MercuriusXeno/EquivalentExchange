@@ -86,16 +86,16 @@ namespace EquivalentExchange
         //handle capturing icons/textures for the mod's texture needs.
         public static void HandleTextureCaching()
         {
-            alchemySkillIcon = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SkillIcon}");
-            alchemySkillIconBordered = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SkillIconBordered}");
-            alchemyShaperIcon = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.ShaperIcon}");
-            alchemyTransmuterIcon = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.TransmuterIcon}");
-            alchemyAdeptIcon = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AdeptIcon}");
-            alchemySageIcon = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SageIcon}");
-            alchemyAurumancerIcon = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AurumancerIcon}");
-            alchemyConduitIcon = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.ConduitIcon}");
-            alchemyBarSprite = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AlchemyBarSpriteBackground}");
-            alchemyBarFillSprite = EquivalentExchange.instance.eeHelper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AlchemyBarSpriteForeground}");
+            alchemySkillIcon = EquivalentExchange.instance.Helper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SkillIcon}");
+            alchemySkillIconBordered = EquivalentExchange.instance.Helper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SkillIconBordered}");
+            alchemyShaperIcon = EquivalentExchange.instance.Helper.Content.Load<Texture2D>($"{assetPrefix}{Icons.ShaperIcon}");
+            alchemyTransmuterIcon = EquivalentExchange.instance.Helper.Content.Load<Texture2D>($"{assetPrefix}{Icons.TransmuterIcon}");
+            alchemyAdeptIcon = EquivalentExchange.instance.Helper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AdeptIcon}");
+            alchemySageIcon = EquivalentExchange.instance.Helper.Content.Load<Texture2D>($"{assetPrefix}{Icons.SageIcon}");
+            alchemyAurumancerIcon = EquivalentExchange.instance.Helper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AurumancerIcon}");
+            alchemyConduitIcon = EquivalentExchange.instance.Helper.Content.Load<Texture2D>($"{assetPrefix}{Icons.ConduitIcon}");
+            alchemyBarSprite = EquivalentExchange.instance.Helper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AlchemyBarSpriteBackground}");
+            alchemyBarFillSprite = EquivalentExchange.instance.Helper.Content.Load<Texture2D>($"{assetPrefix}{Icons.AlchemyBarSpriteForeground}");
         }
 
         internal static Texture2D GetProfessionTexture(int profession)

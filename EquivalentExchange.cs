@@ -25,14 +25,11 @@ namespace EquivalentExchange
         //instantiate config
         private ConfigurationModel Config;
 
-        //this instance of the mod's helper class file, intialized by Entry
-        public IModHelper eeHelper;
-
         //the mod's "static" instance, initialized by Entry. There caN ONly bE ONe
-        public static EquivalentExchange instance;        
+        public static EquivalentExchange instance;
 
         // holds the player data for all active players, then uses statics to expose this player's data.
-        public SaveDataModel currentPlayerData = new SaveDataModel();        
+        public SaveDataModel currentPlayerData = new SaveDataModel();
 
         //config for if the mod is allowed to play sounds
         public static bool canPlaySounds;
@@ -43,15 +40,13 @@ namespace EquivalentExchange
         public const string MSG_CURRENT_ENERGY = "EquivalentExchange.AlchemySkill.CurrentEnergy";
         public const string MSG_MAX_ENERGY = "EquivalentExchange.AlchemySkill.MaxEnergy";
         public const string MSG_TOTAL_VALUE_TRANSMUTED = "EquivalentExchange.AlchemySkill.TotalValueTransumted";
-        
+        public const string MSG_REGEN_TICK = "EquivalentExchange.AlchemySkill.RegenTick";
+
         //handles all the things.
         public override void Entry(IModHelper helper)
         {
             //set the static instance variable. is this an oxymoron?
-            instance = this;
-
-            //preserve this entry method's helper class because it's.. helpful.
-            instance.eeHelper = helper;
+            instance = this;            
 
             //read the config file, poached from horse whistles, get the configured keys and settings
             Config = helper.ReadConfig<ConfigurationModel>();
@@ -73,7 +68,7 @@ namespace EquivalentExchange
 
             //handles high resolution update ticks, like regeneration and held keys.
             GameEvents.UpdateTick += GameEvents_UpdateTick;
-            
+
             //wire up the PreRenderHUD event so I can display info bubbles when needed
             GraphicsEvents.OnPreRenderHudEvent += GraphicsEvents_OnPreRenderHudEvent;
 
@@ -90,14 +85,11 @@ namespace EquivalentExchange
                 GraphicsEvents.OnPostRenderHudEvent += GraphicsEvents_OnPostRenderHudEvent;
             }
 
-            //add a debug option to give yourself experience
-            Helper.ConsoleCommands.Add("player_givealchemyexp", "player_givealchemyexp <amount>", GiveAlchemyExperience);
-
             //post render event for skills menu
             GraphicsEvents.OnPostRenderGuiEvent += DrawAfterGUI;
-            
+
             // handles end of night event requirements like alchemy energy being restored and level ups.
-            SpaceEvents.ShowNightEndMenus += SpaceEvents_ShowNightEndMenus; 
+            SpaceEvents.ShowNightEndMenus += SpaceEvents_ShowNightEndMenus;
 
             // stuff we have to do for multiplayer now, handles client join events to cascade data to the non-hosts.
             SpaceEvents.ServerGotClient += SpaceEvents_ServerGotClient;
@@ -108,6 +100,7 @@ namespace EquivalentExchange
             Networking.RegisterMessageHandler(MSG_CURRENT_ENERGY, OnCurrentEnergyMessage);
             Networking.RegisterMessageHandler(MSG_MAX_ENERGY, OnMaxEnergyMessage);
             Networking.RegisterMessageHandler(MSG_TOTAL_VALUE_TRANSMUTED, OnTransmutedValueMessage);
+            Networking.RegisterMessageHandler(MSG_REGEN_TICK, OnRegenTick);
 
             //check for chase's skills
             CheckForLuck();
@@ -169,8 +162,10 @@ namespace EquivalentExchange
                     writer.Write(totalValue.Key);
                     writer.Write(totalValue.Value);
                 }
-                
-                // Log.debug("Streaming data to joined client.");
+
+
+                Log.info($"Player data being broadcasted to { e.FarmerID }.");
+                Log.info($"Total objects { PlayerData.AlchemyLevel.Count }");
                 Networking.ServerSendTo(e.FarmerID, MSG_DATA, stream.ToArray());
             }
         }
@@ -203,8 +198,11 @@ namespace EquivalentExchange
         // unabashedly stolen from spacechase, like all things.
         private void OnDataMessage(IncomingMessage msg)
         {
+            Log.info("Receiving player data from server.");
             // Log.debug("Receiving updated data from server.");
             int count = msg.Reader.ReadInt32();
+
+            Log.info($"Player data objects found: { count }.");
 
             // Log.debug($"Count of { count }");
 
@@ -243,29 +241,62 @@ namespace EquivalentExchange
                 PlayerData.TotalValueTransmuted[id] = totalValueTransmuted;
             }
         }
-        
+
         static int lastTickTime = 0;  // The time at the last tick processed.
         public static int CurrentDefaultTickInterval => 7000 + (Game1.currentLocation?.getExtraMillisecondsPerInGameMinuteForThisLocation() ?? 0);
         public static int CurrentRegenResolution => CurrentDefaultTickInterval / 100;
-        private static void RegenerateAlchemyBarBasedOnLeylineDistance()
+        private static void RegenerateAlchemyBar()
         {
+            // Log.debug("Regen debug out:");
+            // Log.debug($"Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu != null || !Game1.shouldTimePass()");
+            // Log.debug($"{Game1.menuUp}{Game1.paused}{Game1.dialogueUp}{Game1.activeClickableMenu != null}{!Game1.shouldTimePass() }");
             //checking for paused or menuUp doesn't return true for some reason, but this is
             //a reliable way to check to see if the player is in a menu to prevent regen.
             if (Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu != null || !Game1.shouldTimePass())
                 return;
+            // Log.debug($"Game tick interval: {Game1.gameTimeInterval}");
 
+            // it's important to point out that only the master game will ever have a gameTimeInterval > 0
+            // this *never fires* for clients, which is why the server has to cascade a broadcast message to clients to DoRegenTick();
             int currentTime = Game1.gameTimeInterval;
+
             if (currentTime - lastTickTime < 0)
                 lastTickTime = 0;
-            int timeElapsed = currentTime - lastTickTime;            
+            int timeElapsed = currentTime - lastTickTime;
             if (timeElapsed > CurrentRegenResolution)
             {
-                double leylineDistance = Math.Min(10D, DistanceCalculator.GetPathDistance(Game1.player.currentLocation));
-                double regenAlchemyBar = Math.Min(10D - Math.Max(0, leylineDistance - AlchemyLevel), 1D) / 10D;
-                regenAlchemyBar *= MaxEnergy / 100D;
-                CurrentEnergy = (float)Math.Min(CurrentEnergy + Math.Max(0.05D, regenAlchemyBar), MaxEnergy);
+                DoRegenTick();
+                BroadcastRegenTick();
                 lastTickTime = currentTime;
-            }            
+            }
+        }
+
+        private static void BroadcastRegenTick()
+        {
+            foreach (var farmer in Game1.otherFarmers)
+            {
+                using (var stream = new MemoryStream())
+                using (var writer = new BinaryWriter(stream))
+                {
+                    // arbitrary bool
+                    writer.Write(true);
+                    Networking.ServerSendTo(farmer.Key, MSG_REGEN_TICK, stream.ToArray());
+                }
+            }
+        }
+
+        private static void OnRegenTick(IncomingMessage msg)
+        {
+            var arbitraryBool = msg.Reader.ReadBoolean();
+            DoRegenTick();
+        }
+
+        private static void DoRegenTick()
+        {
+            // handles this player's regen
+            double regenAlchemyBar = Math.Sqrt(AlchemyLevel + 1) / 10D;
+            regenAlchemyBar *= MaxEnergy / 100D;
+            CurrentEnergy = (float)Math.Min(CurrentEnergy + Math.Max(0.05D, regenAlchemyBar), MaxEnergy);
         }
 
         public static SaveDataModel PlayerData
@@ -353,7 +384,7 @@ namespace EquivalentExchange
                     return 0F;
                 // Log.debug($"Current alchemy max energy is {PlayerData.AlkahestryMaxEnergy[PlayerId]}");
                 return PlayerData.AlkahestryMaxEnergy[PlayerId];
-            }       
+            }
             set
             {
                 if (!PlayerData.AlkahestryMaxEnergy.ContainsKey(PlayerId) || PlayerData.AlkahestryMaxEnergy[PlayerId] != value)
@@ -402,7 +433,7 @@ namespace EquivalentExchange
         {
             TotalValueTransmuted += value;
             // Extremely nerfed formula for alchemy energy training.
-            var updatedMaxEnergy = (int)Math.Floor(Math.Sqrt(Math.Sqrt(TotalValueTransmuted / 10)));
+            var updatedMaxEnergy = (int)Math.Floor(Math.Sqrt(TotalValueTransmuted / 10)) + (AlchemyLevel * 10);
             MaxEnergy = updatedMaxEnergy;
         }
 
@@ -467,32 +498,7 @@ namespace EquivalentExchange
                 }
             }
         }
-
-        //command to give yourself experience for debug purposes primarily
-
-        private void GiveAlchemyExperience(object sender, string[] args)
-        {
-            if (args.Length != 1)
-            {
-                Log.info($"{LocalizationStrings.Get(LocalizationStrings.CommandFormat)}: giveAlchemyExp <{LocalizationStrings.Get(LocalizationStrings.amount)}>");
-                return;
-            }
-
-            int amt = 0;
-            try
-            {
-                amt = Convert.ToInt32(args[0]);
-            }
-            catch (Exception e)
-            {
-                Log.error($"{LocalizationStrings.Get(LocalizationStrings.BadExperienceAmount)}.");
-                throw e;
-            }
-
-            Alchemy.AddAlchemyExperience(amt);
-            Log.info($"{LocalizationStrings.Get(LocalizationStrings.Added)} " + amt + $" {LocalizationStrings.Get(LocalizationStrings.alchemyExperience)}.");
-        }
-
+        
         public List<int> showLevelUpMenusByRank = new List<int>();
 
         internal void AddSkillUpMenuAppearance(int alchemyLevel)
@@ -508,10 +514,24 @@ namespace EquivalentExchange
 
         private void GameEvents_UpdateTick(object sender, EventArgs e)
         {
+            // Log.debug($"Update tick firing. Context isWorldReady returns { Context.IsWorldReady.ToString() }");
             if (!Context.IsWorldReady)
                 return;
-            RegenerateAlchemyBarBasedOnLeylineDistance();
+            RegenerateAlchemyBar();
             HandleHeldTransmuteKeysUpdateTick();
+
+            // Detect (heuristically) whether the player gave the wizard a slime ball. This is the gateway for the rest of the mod.
+            HandleWizardSlimeListener();
+        }
+
+
+        // there are two states we need to preserve. 
+        // The first is whether the player gave the wizard a slime.        
+        // The second is whether the player has unlocked their alchemy ability.
+        // In between those, we can infer that the player hasn't seen the dialog.
+        private void HandleWizardSlimeListener()
+        {
+
         }
 
         private void HandleHeldTransmuteKeysUpdateTick()
@@ -525,16 +545,6 @@ namespace EquivalentExchange
                     updateTickCount = (int)Math.Floor(Math.Max(1, updateTickCount * 0.9F));
                 }
             }
-
-            if (liquidateKeyHeld)
-            {
-                heldCounter++;
-                if (heldCounter % updateTickCount == 0)
-                {
-                    HandleEitherTransmuteEvent(Config.LiquidateKey.ToString());
-                    updateTickCount = (int)Math.Floor(Math.Max(1, updateTickCount * 0.9F));
-                }
-            }
         }
 
         //show the level up menus at night when you hit a profession breakpoint.
@@ -543,7 +553,7 @@ namespace EquivalentExchange
             // hack to fix.. something. Recommended by space to avoid errors.
             if (Game1.endOfNightMenus.Count == 0)
                 Game1.endOfNightMenus.Push(new SaveGameMenu());
-            
+
             bool playerNeedsLevelFiveProfession = AlchemyLevel >= 5 && !Game1.player.professions.Contains((int)Professions.Shaper) && !Game1.player.professions.Contains((int)Professions.Sage);
             bool playerNeedsLevelTenProfession = AlchemyLevel >= 10 && !Game1.player.professions.Contains((int)Professions.Transmuter) && !Game1.player.professions.Contains((int)Professions.Adept) && !Game1.player.professions.Contains((int)Professions.Aurumancer) && !Game1.player.professions.Contains((int)Professions.Conduit);
             bool playerGainedALevel = showLevelUpMenusByRank.Count() > 0;
@@ -613,23 +623,105 @@ namespace EquivalentExchange
             DrawingUtil.DoPostRenderHudEvent();
         }
 
-        //ensures that the wizard tower and witch hut are leylines for the mod by default.
-        private static string[] VANILLA_LEYLINE_LOCATIONS = new string[] { "WizardHouse", "WitchHut", "Desert" };
-
-        private void InitializeVanillaLeylines()
-        {
-            foreach (string leyline in VANILLA_LEYLINE_LOCATIONS)
-            {
-                Game1.getLocationFromName(leyline)?.map.Properties.Add(Alchemy.LEYLINE_PROPERTY_INDICATOR, 0F);
-            }
-        }
-
         //fires when loading a save, initializes the item blacklist and loads player save data.
         private void SaveEvents_AfterLoad(object sender, EventArgs e)
         {
             InitializePlayerData();
-            InitializeVanillaLeylines();
-            PopulateItemLibrary();
+        }
+
+        // the order of this list is not arbitrary - it starts at one end of the the transmutation map
+        // and works its way to the other. Certain professions allow alternative inputs/outputs
+        // or increase the number of "steps" away from a target you can get inputs.
+        public static List<int> transmutationSteps = new List<int>
+        {
+            Reference.Items.IridiumOre,
+            Reference.Items.GoldOre,
+            Reference.Items.IronOre,
+            Reference.Items.CopperOre,
+            Reference.Items.Stone,
+            Reference.Items.Clay,
+            Reference.Items.Coal,
+            Reference.Items.Sap,
+            Reference.Items.Fiber,
+            Reference.Items.Wood,
+            Reference.Items.Hardwood
+        };
+
+        public static List<AlchemyTransmutationRecipe> GetTransmutationFormulas()
+        {
+            var recipes = new List<AlchemyTransmutationRecipe>();
+
+            // iterate over each step in the transmutation "map"; by default, you can transmute into any object from 1 step away.
+            foreach(var step in transmutationSteps)
+            {
+                var index = transmutationSteps.IndexOf(step);
+                if (index > 0)
+                {
+                    recipes.AddRecipeLink(transmutationSteps[index - 1], step);
+                }
+                if (index < transmutationSteps.Count - 1)
+                {
+                    recipes.AddRecipeLink(transmutationSteps[index + 1], step);
+                }
+
+                // if the player has the "Sage" profession, they can traverse up to 2 steps away.
+                if (index > 1 && HasProfession(Professions.Sage))
+                {
+                    recipes.AddRecipeLink(transmutationSteps[index - 2], step);
+                }
+                if (index < transmutationSteps.Count - 2 && HasProfession(Professions.Sage))
+                {
+                    recipes.AddRecipeLink(transmutationSteps[index + 2], step);
+                }
+                
+                // if the player has the adept profession, you can transmute this thing into slimes no matter what, but transmutations cost double.
+                if (HasProfession(Professions.Adept))
+                {
+                    recipes.AddRecipeLink(step, Reference.Items.Slime, 2);
+                }
+
+                // if the player has the conduit profession, you can create this thing from slimes no matter what, but transmutations cost double.
+                if (HasProfession(Professions.Conduit))
+                {
+                    recipes.AddRecipeLink(Reference.Items.Slime, step, 2);
+                }
+
+                // if the player has the shaper profession you can create stone and clay from slime and vice versa.
+                if (HasProfession(Professions.Shaper) && (step == Reference.Items.Stone || step == Reference.Items.Clay))
+                {
+                    recipes.AddRecipeLink(Reference.Items.Slime, step);
+                    recipes.AddRecipeLink(step, Reference.Items.Slime);
+                }
+
+                // if the player has the transmuter profession you can create wood from slime and vice versa.
+                if (HasProfession(Professions.Transmuter) && step == Reference.Items.Wood)
+                {
+                    recipes.AddRecipeLink(Reference.Items.Slime, step);
+                    recipes.AddRecipeLink(step, Reference.Items.Slime);
+                }
+
+                // if the player has the aurumancer profession, you can create gold from slime and vice versa.
+                if (HasProfession(Professions.Aurumancer) && step == Reference.Items.GoldOre)
+                {
+                    recipes.AddRecipeLink(Reference.Items.Slime, step);
+                    recipes.AddRecipeLink(step, Reference.Items.Slime);
+                }
+            }
+
+            foreach(var recipe in recipes)
+            {
+                var inputName = Util.GetItemName(recipe.InputId);
+                var inputValue = Util.GetItemValue(recipe.InputId);
+                var outputName = Util.GetItemName(recipe.OutputId);
+                var outputValue = Util.GetItemValue(recipe.OutputId);
+                Log.debug($"Transmute: {recipe.GetInputCost()} {inputName} ({inputValue}) into {recipe.GetOutputQuantity()} {outputName} ({outputValue}), costs {recipe.Cost}");
+            }
+            return recipes;
+        }       
+
+        public static bool HasProfession(int profession)
+        {
+            return Game1.player.professions.Contains(profession);
         }
 
         //handles reading current player json file and loading them into memory
@@ -640,7 +732,7 @@ namespace EquivalentExchange
             {
                 //fetch the alchemy save for this game file.
                 if (!Game1.IsMultiplayer || Game1.IsMasterGame)
-                    PlayerData = instance.eeHelper.ReadJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{Game1.uniqueIDForThisGame.ToString()}.json")) ?? new SaveDataModel();
+                    PlayerData = Helper.ReadJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{Game1.uniqueIDForThisGame.ToString()}.json")) ?? new SaveDataModel();
 
                 // if we are the player/host and we don't have a profile, let's make one for ourselves.
                 var farmerId = Game1.player.uniqueMultiplayerID;
@@ -655,6 +747,7 @@ namespace EquivalentExchange
                 if (!PlayerData.TotalValueTransmuted.ContainsKey(farmerId))
                     PlayerData.TotalValueTransmuted[farmerId] = 0;
             }
+            Log.info("Player data loaded.");
         }
 
         //handles writing "each" player's json save to the appropriate file.
@@ -665,17 +758,17 @@ namespace EquivalentExchange
 
         private void SavePlayerData()
         {
+            Log.info("Saving player data.");
             if (!Game1.IsMultiplayer || Game1.IsMasterGame)
-                instance.eeHelper.WriteJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{ Game1.uniqueIDForThisGame.ToString()}.json"), PlayerData);
+                Helper.WriteJsonFile<SaveDataModel>(Path.Combine(Constants.CurrentSavePath, $"{ Game1.uniqueIDForThisGame.ToString()}.json"), PlayerData);
         }
 
         /// <summary>Update the mod's config.json file from the current <see cref="Config"/>.</summary>
         internal void SaveConfig()
         {
-            eeHelper.WriteConfig(Config);
+            Helper.WriteConfig(Config);
         }
-
-        private static bool allowInfoBubbleToRender = false;
+        
         private static void GraphicsEvents_OnPreRenderHudEvent(object sender, EventArgs e)
         {
             if (!Context.IsWorldReady)
@@ -683,232 +776,18 @@ namespace EquivalentExchange
 
             //one of these counts as true whenever the player is in the bus stop...
             if (Game1.eventUp)
-                return;            
+                return;
 
             //per the advice of Ento, abort if the player is in an event
             if (Game1.CurrentEvent != null)
                 return;
 
-            RenderInformationOverlayToHUD();
-
-            RenderAlchemyBarToHUD();         
+            RenderAlchemyBarToHUD();
         }
-
-        public static void RenderInformationOverlayToHUD()
+        
+        public static int GetSlimeValue()
         {
-            //something may have gone wrong if this is null, maybe there's no save data?
-            if (Game1.player != null && allowInfoBubbleToRender)
-            {
-                //get the player's current item
-                Item heldItem = Game1.player.CurrentItem;
-
-                //player is holding item which is valid and can be dropped
-                if (heldItem != null && !blackListedItemIDs.Contains(heldItem.parentSheetIndex) && heldItem.canBeDropped())
-                {
-                    //get the item's ID
-                    int heldItemID = heldItem.parentSheetIndex;
-
-                    //get the transmutation value, it's based on what it's worth to the player, including profession bonuses. This affects both cost and value.
-                    int actualValue = ((StardewValley.Object)heldItem).sellToStorePrice();                    
-                    int liquidateValue = (int)Math.Floor(Alchemy.GetLiquidationValuePercentage() * actualValue);
-                    float staminaDrain = (float)Math.Round(Alchemy.GetStaminaCostForTransmutation(actualValue), 2);
-                    float luckyChance = (float)Math.Round(Alchemy.GetLuckyTransmuteChance() * 100, 2);
-                    float reboundChance = (float)Math.Round(Alchemy.GetReboundChance(false, false) * 100, 2);
-                    int reboundDamage = Alchemy.GetReboundDamage(actualValue);
-
-                    //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
-                    int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
-
-                    //apply special constraints in the event of small-ish maps here
-                    bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
-
-                    //borders from the screen are viewport width / 2 - tileSizeWidth / 2
-                    int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
-
-                    int xPos = (isPlayerOutdoors ? viewportBorderWidth : 0) - 15;
-                    int yPos = 0;// Game1.viewport.Height / 2 - 200;
-                    int xSize = 240;
-                    int ySize = 290 - (reboundChance > 0 ? 0 : 30);
-                    int dialogPositionMarkerX = xPos + 40;
-                    int dialogPositionMarkerY = yPos + 100;
-                    int rowSpacing = 30;
-
-                    Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
-
-                    //value
-                    string cost = $"{LocalizationStrings.Get(LocalizationStrings.Value)} {liquidateValue.ToString()}g";
-                    Game1.spriteBatch.DrawString(Game1.smallFont, cost, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                    dialogPositionMarkerY += rowSpacing;
-
-                    //luck
-                    string luck = $"{LocalizationStrings.Get(LocalizationStrings.Luck)} {luckyChance.ToString()}%";
-                    Game1.spriteBatch.DrawString(Game1.smallFont, luck, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                    dialogPositionMarkerY += rowSpacing;
-
-                    //Stam
-                    string stam = $"{LocalizationStrings.Get(LocalizationStrings.Energy)} -{staminaDrain.ToString()}";
-                    Game1.spriteBatch.DrawString(Game1.smallFont, stam, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                    dialogPositionMarkerY += rowSpacing;
-
-                    //rebound info shows up if there's a chance to rebound
-                    if (reboundChance > 0)
-                    {
-                        string rebound = $"{LocalizationStrings.Get(LocalizationStrings.Fail)} {reboundChance.ToString()}%";
-                        string damage = $"{LocalizationStrings.Get(LocalizationStrings.HP)} -{reboundDamage.ToString()}";
-                        Game1.spriteBatch.DrawString(Game1.smallFont, rebound, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                        dialogPositionMarkerY += rowSpacing;
-                        Game1.spriteBatch.DrawString(Game1.smallFont, damage, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                        dialogPositionMarkerY += rowSpacing;
-                    }
-                } else if (heldItem is Axe || heldItem is Pickaxe)
-                {
-
-                    //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
-                    int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
-
-                    //apply special constraints in the event of small-ish maps here
-                    bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
-
-                    //borders from the screen are viewport width / 2 - tileSizeWidth / 2
-                    int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
-
-                    int xPos = (isPlayerOutdoors ? viewportBorderWidth : 0) - 15;
-                    int yPos = 0;// Game1.viewport.Height / 2 - 200;
-                    int xSize = 330;
-                    int ySize = 260;
-
-                    int dialogPositionMarkerX = xPos + 40;
-                    int dialogPositionMarkerY = yPos + 100;
-                    int rowSpacing = 30;
-
-                    Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
-
-
-                    int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
-                    List<string> toolTransmuteDescription = new List<string>();
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.MouseOverWeeds)}");
-                    toolTransmuteDescription.Add($"{(heldItem is Axe ? $"{LocalizationStrings.Get(LocalizationStrings.orStick)}" : $"{LocalizationStrings.Get(LocalizationStrings.orStone)}")} {LocalizationStrings.Get(LocalizationStrings.andPress)}");
-                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} {LocalizationStrings.Get(LocalizationStrings.toBreakIt)}");
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.BreaksA)} {sideLength}x{sideLength} {LocalizationStrings.Get(LocalizationStrings.area)}.");
-
-                    foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
-                    {
-                        Game1.spriteBatch.DrawString(Game1.smallFont, toolTransmuteDescriptionLine, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                        dialogPositionMarkerY += rowSpacing;
-                    }
-                } else if (heldItem is MeleeWeapon && (heldItem as MeleeWeapon).Name.ToLower().Contains("scythe")) {
-                    //stuff happens, no clue what
-
-                    //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
-                    int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
-
-                    //apply special constraints in the event of small-ish maps here
-                    bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
-
-                    //borders from the screen are viewport width / 2 - tileSizeWidth / 2
-                    int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
-
-                    int xPos = (isPlayerOutdoors ? viewportBorderWidth : 0) - 15;
-                    int yPos = 0;// Game1.viewport.Height / 2 - 200;
-                    int xSize = 330;
-                    int ySize = 260;
-
-                    int dialogPositionMarkerX = xPos + 40;
-                    int dialogPositionMarkerY = yPos + 100;
-                    int rowSpacing = 30;
-
-                    Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
-
-
-                    int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
-                    List<string> toolTransmuteDescription = new List<string>();
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.MouseOverWeeds)}");
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.orGrassAndPress)}");
-                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} {LocalizationStrings.Get(LocalizationStrings.toMowItDown)}");
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.CutsA)} {sideLength}x{sideLength} {LocalizationStrings.Get(LocalizationStrings.area)}");
-
-                    foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
-                    {
-                        Game1.spriteBatch.DrawString(Game1.smallFont, toolTransmuteDescriptionLine, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                        dialogPositionMarkerY += rowSpacing;
-                    }
-                }
-                else if (heldItem is WateringCan)
-                {
-                    //stuff happens, no clue what
-
-                    //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
-                    int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
-
-                    //apply special constraints in the event of small-ish maps here
-                    bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
-
-                    //borders from the screen are viewport width / 2 - tileSizeWidth / 2
-                    int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
-
-                    int xPos = (isPlayerOutdoors ? viewportBorderWidth : 0) - 15;
-                    int yPos = 0;// Game1.viewport.Height / 2 - 200;
-                    int xSize = 330;
-                    int ySize = 230;
-
-                    int dialogPositionMarkerX = xPos + 40;
-                    int dialogPositionMarkerY = yPos + 100;
-                    int rowSpacing = 30;
-
-                    Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
-
-
-                    int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
-                    List<string> toolTransmuteDescription = new List<string>();
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.MouseOverTilledSoil)}");
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.andPress)} {EquivalentExchange.instance.Config.TransmuteKey.ToString()} {LocalizationStrings.Get(LocalizationStrings.to)}");
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.waterA)} {sideLength}x{sideLength} {LocalizationStrings.Get(LocalizationStrings.area)}.");
-
-                    foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
-                    {
-                        Game1.spriteBatch.DrawString(Game1.smallFont, toolTransmuteDescriptionLine, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                        dialogPositionMarkerY += rowSpacing;
-                    }
-                }
-                else if (heldItem is Hoe)
-                {
-                    //stuff happens, no clue what
-
-                    //special consideration for maps that are smaller than your display viewport (horizontally, this happens at the bus stop)
-                    int tileSizeWidth = Game1.player.currentLocation.Map.DisplayWidth;
-
-                    //apply special constraints in the event of small-ish maps here
-                    bool isPlayerOutdoors = Game1.player.currentLocation.IsOutdoors;
-
-                    //borders from the screen are viewport width / 2 - tileSizeWidth / 2
-                    int viewportBorderWidth = Math.Max(0, Game1.viewport.Width / 2 - tileSizeWidth / 2);
-
-                    int xPos = (isPlayerOutdoors ? viewportBorderWidth : 0) - 15;
-                    int yPos = 0;// Game1.viewport.Height / 2 - 200;
-                    int xSize = 330;
-                    int ySize = 260;
-
-                    int dialogPositionMarkerX = xPos + 40;
-                    int dialogPositionMarkerY = yPos + 100;
-                    int rowSpacing = 30;
-
-                    Game1.drawDialogueBox(xPos, yPos, xSize, ySize, false, true, (string)null, false);
-
-
-                    int sideLength = 2 * Alchemy.GetToolTransmuteRadius() + 1;
-                    List<string> toolTransmuteDescription = new List<string>();
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.MouseOverSoil)}");
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.orGrassAndPress)}");
-                    toolTransmuteDescription.Add($"{EquivalentExchange.instance.Config.TransmuteKey.ToString()} {LocalizationStrings.Get(LocalizationStrings.toTillTheSoil)}");
-                    toolTransmuteDescription.Add($"{LocalizationStrings.Get(LocalizationStrings.orBreakA)} {sideLength}x{sideLength} {LocalizationStrings.Get(LocalizationStrings.area)}.");
-
-                    foreach (string toolTransmuteDescriptionLine in toolTransmuteDescription)
-                    {
-                        Game1.spriteBatch.DrawString(Game1.smallFont, toolTransmuteDescriptionLine, new Microsoft.Xna.Framework.Vector2(dialogPositionMarkerX, dialogPositionMarkerY), Game1.textColor);
-                        dialogPositionMarkerY += rowSpacing;
-                    }
-                }
-            }
+            return Util.GetItemValue(Reference.Items.Slime);
         }
 
         public static void RenderAlchemyBarToHUD()
@@ -928,7 +807,7 @@ namespace EquivalentExchange
 
             int alchemyBarPositionX = Game1.viewport.Width - (isPlayerOutdoors ? viewportBorderWidth : 0) - alchemyBarWidth - 120;
             int alchemyBarPositionY = Game1.viewport.Height - alchemyBarHeight - 16;
-            
+
             Vector2 alchemyBarPosition = new Vector2(alchemyBarPositionX, alchemyBarPositionY);
 
             Game1.spriteBatch.Draw(DrawingUtil.alchemyBarSprite, alchemyBarPosition, new Rectangle(0, 0, DrawingUtil.alchemyBarSprite.Width, DrawingUtil.alchemyBarSprite.Height), Color.White, 0, new Vector2(), scale, SpriteEffects.None, 1);
@@ -968,12 +847,6 @@ namespace EquivalentExchange
             if (e.KeyPressed == leftShiftKey || e.KeyPressed == rightShiftKey)
                 SetModifyingControlKeyState(e.KeyPressed, false);
 
-            //pop up a window with information about your success rates, transmute rates, the leyline locale, useful stuff to know about what you're holding.. etc.
-            if (instance.Config.TransmuteInfoKey.Equals(e.KeyPressed.ToString()))
-            {
-                allowInfoBubbleToRender = false;
-            }
-
             //the key for transmuting is pressed, fire once and then initiate the callback routine to auto-fire.
             if (instance.Config.TransmuteKey.Equals(e.KeyPressed.ToString()))
             {
@@ -981,19 +854,10 @@ namespace EquivalentExchange
                 instance.heldCounter = 1;
                 instance.updateTickCount = AUTO_REPEAT_UPDATE_RATE_REFRESH;
             }
-
-            //the key pressed is one of the mods keys.. I'm doing this so I don't fire logic for anything unless either of the mod's keys were pressed.            
-            if (instance.Config.LiquidateKey.Equals(e.KeyPressed.ToString()))
-            {
-                liquidateKeyHeld = false;
-                instance.heldCounter = 1;
-                instance.updateTickCount = AUTO_REPEAT_UPDATE_RATE_REFRESH;
-            }
         }
 
         //remembers the state of the mod control keys so we can do some fancy stuff.
         public static bool transmuteKeyHeld = false;
-        public static bool liquidateKeyHeld = false;
 
         //handles the key press event for figuring out if control or shift is held down, or either of the mod's major transmutation actions is being attempted.
         public static void ControlEvents_KeyPressed(object sender, EventArgsKeyPressed e)
@@ -1001,12 +865,6 @@ namespace EquivalentExchange
             //let the app know the shift key is held
             if (e.KeyPressed == leftShiftKey || e.KeyPressed == rightShiftKey)
                 SetModifyingControlKeyState(e.KeyPressed, true);
-
-            //pop up a window with information about your success rates, transmute rates, the leyline locale, useful stuff to know about what you're holding.. etc.
-            if (instance.Config.TransmuteInfoKey.Equals(e.KeyPressed.ToString()))
-            {
-                allowInfoBubbleToRender = true;
-            }
 
             //the key for transmuting is pressed, fire once and then initiate the callback routine to auto-fire.
             if (instance.Config.TransmuteKey.Equals(e.KeyPressed.ToString()))
@@ -1016,15 +874,8 @@ namespace EquivalentExchange
             }
 
             //the key pressed is one of the mods keys.. I'm doing this so I don't fire logic for anything unless either of the mod's keys were pressed.            
-            if (instance.Config.LiquidateKey.Equals(e.KeyPressed.ToString()))
-            {
-                liquidateKeyHeld = true;
-                HandleEitherTransmuteEvent(e.KeyPressed.ToString());
-            }
-
-            //the key pressed is one of the mods keys.. I'm doing this so I don't fire logic for anything unless either of the mod's keys were pressed.            
             if (instance.Config.NormalizeKey.Equals(e.KeyPressed.ToString()))
-            {                
+            {
                 HandleEitherTransmuteEvent(e.KeyPressed.ToString());
             }
         }
@@ -1063,7 +914,7 @@ namespace EquivalentExchange
                             bool isWateringCan = itemTool is WateringCan;
 
                             bool canDoToolAlchemy = isScythe || isAxe || isPickaxe || isHoe || isWateringCan;
-                            
+
                             if (canDoToolAlchemy)
                             {
                                 Alchemy.HandleToolTransmute(itemTool);
@@ -1071,7 +922,7 @@ namespace EquivalentExchange
                         }
 
                         //abort any transmutation event for blacklisted items or items that for whatever reason can't exist in world.
-                        if (blackListedItemIDs.Contains(heldItemID) || !heldItem.canBeDropped())
+                        if (!GetTransmutationFormulas().HasItem(heldItemID) || !heldItem.canBeDropped())
                         {
                             return;
                         }
@@ -1083,12 +934,6 @@ namespace EquivalentExchange
                         if (keyPressed.ToString() == instance.Config.TransmuteKey)
                         {
                             Alchemy.HandleTransmuteEvent(heldItem, actualValue);
-                        }
-
-                        //try to liquidate the item [sell for gold]
-                        if (keyPressed.ToString() == instance.Config.LiquidateKey)
-                        {
-                            Alchemy.HandleLiquidateEvent(heldItem, actualValue);
                         }
 
                         //try to normalize the item [make all items of a different quality one quality and exchange any remainder for gold]
@@ -1130,34 +975,12 @@ namespace EquivalentExchange
                     break;
             }
         }
-        
-        //holds a list of item IDs which are invalid for transmutation due to being created by recipes. This is to help avoid positive value feedback loops.
-        public static List<int> blackListedItemIDs = new List<int>();
 
-        public void PopulateItemLibrary()
-        {
-            //iterate over game objects
-            foreach (KeyValuePair<int, string> entry in Game1.objectInformation)
-            {
-                //get basic vars
-
-                //id
-                int itemID = entry.Key;
-
-                //StardewValley.Object itemObject = itemItem as StardewValley.Object;
-                var itemObject = new StardewValley.Object(itemID, 1, false, -1, 0);
-
-                //objects with a cost of 0 are blacklisted
-                if (itemObject.sellToStorePrice() < 1)
-                {
-                    blackListedItemIDs.Add(itemID);
-                }
-            }
-
-            //prismatic shard is blacklisted.
-            blackListedItemIDs.Add(StardewValley.Object.prismaticShardIndex);
-        }
-
+        //// holds a list of transmutation recipes used by the mod.
+        //public static Dictionary<int> transmutationFormulas = new Dictionary<int>({
+        //        Game1.object
+        //    });
+    
         //hopefully the stuff needed to support spacechase0's show-experience-bars mod can start here
 
         public static bool hasExperienceBarsMod = false;
@@ -1178,7 +1001,7 @@ namespace EquivalentExchange
         public static bool hasAllProfessionsMod = false;
         public void CheckForAllProfessionsMod()
         {
-            if (!eeHelper.ModRegistry.IsLoaded("community.AllProfessions"))
+            if (!Helper.ModRegistry.IsLoaded("community.AllProfessions"))
             {
                 //Log.info($"{LocalizationStrings.Get(LocalizationStrings.AllProfessionsNotFound)}");
                 return;
