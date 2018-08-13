@@ -25,12 +25,6 @@ namespace EquivalentExchange
         //needed for rebound rolls
         public static Random alchemyRandom = new Random();
 
-        //increment alchemy experience and handle levelups if applicable
-        public static void AddAlchemyExperience(int exp)
-        {
-            EquivalentExchange.AddAlchemyExperience(exp);
-        }        
-
         //overloaded method for how much experience is needed to reach a specific level.
         public static int GetAlchemyExperienceNeededForLevel(int level)
         {
@@ -49,7 +43,6 @@ namespace EquivalentExchange
         public static void HandleAlchemyEnergyDeduction(double energyCost, bool isForcedStaminaDrain)
         {
             double remainingStaminaCost = energyCost;
-
             // if the stamina drain is "forced" it means you can't pay for this transaction with energy
             // the *entire* cost goes to stamina.
             if (!isForcedStaminaDrain)
@@ -63,6 +56,7 @@ namespace EquivalentExchange
                 Alchemy.ReduceAlkahestryEnergy(alkahestryCost);
             }
             Game1.player.Stamina -= (float)remainingStaminaCost;
+            EquivalentExchange.AddAlchemyExperience((int)Math.Floor(Math.Max(energyCost, 1D)));
         }
 
         public static void HandleTransmuteEvent(Item heldItem, int actualValue)
@@ -92,7 +86,7 @@ namespace EquivalentExchange
 
             Alchemy.HandleAlchemyEnergyDeduction(optimalRecipe.GetEnergyCost(), false);
             
-            Alchemy.IncreaseTotalTransmuteValue(1);
+            Alchemy.IncreaseTotalTransmuteValue((int)Math.Floor(Math.Max(1D, optimalRecipe.GetEnergyCost())));
                         
             Util.TakeItemFromPlayer(optimalRecipe.InputId, optimalRecipe.GetInputCost(), Game1.player);
 
@@ -228,7 +222,7 @@ namespace EquivalentExchange
                 {
                     if (!isScythe)
                     {
-                        if (EquivalentExchange.CurrentEnergy + Game1.player.Stamina - (GetToolTransmutationEnergyCost(EquivalentExchange.AlchemyLevel) + 1) <= 0)
+                        if (!IsCapableOfWithstandingToolTransmuteCost(Game1.player))
                             return;
                     }
 
@@ -618,6 +612,17 @@ namespace EquivalentExchange
             Alchemy.HandleAlchemyEnergyDeduction(GetToolTransmutationEnergyCost(EquivalentExchange.AlchemyLevel), false);
             Alchemy.HandleAlchemyEnergyDeduction(GetToolTransmutationStaminaCost(EquivalentExchange.AlchemyLevel), true);            
             Alchemy.IncreaseTotalTransmuteValue(ENERGY_COST_OF_TOOL_TRANSMUTES);
+        }
+
+        public static bool IsCapableOfWithstandingToolTransmuteCost(Farmer player)
+        {
+            var energyCost = GetToolTransmutationEnergyCost(EquivalentExchange.AlchemyLevel);
+            var staminaCost = GetToolTransmutationStaminaCost(EquivalentExchange.AlchemyLevel);
+            double energyCostHandled = Math.Min(EquivalentExchange.CurrentEnergy, energyCost);
+            double energyCostOverflow = Math.Max(0D, energyCost - energyCostHandled);
+            staminaCost += energyCostOverflow;
+
+            return player.stamina - 1 >= staminaCost;
         }
 
         private static bool DoToolFunction(GameLocation location, StardewValley.Farmer who, Tool tool, int x, int y)

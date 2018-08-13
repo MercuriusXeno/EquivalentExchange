@@ -31,9 +31,7 @@ namespace EquivalentExchange.Models
         {            
             foreach(var recipe in recipes)
             {
-                var input = recipe.InputId;
-                var cost = recipe.GetInputCost();
-                if (farmer.hasItemInInventory(input, recipe.GetInputCost() + 1))
+                if (farmer.hasItemInInventory(recipe.InputId, recipe.GetInputCost() + 1))
                 {
                     if (EquivalentExchange.CurrentEnergy + (Math.Max(0, farmer.stamina - 1)) >= recipe.GetEnergyCost())
                     {
