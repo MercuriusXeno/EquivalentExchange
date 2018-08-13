@@ -15,10 +15,8 @@ using StardewValley;
 
 namespace EquivalentExchange
 {
-    public class AlchemySkillsPage : IClickableMenu
+    public class AlchemySkillsPage : SkillsPage
     {
-        public List<ClickableTextureComponent> skillBars = new List<ClickableTextureComponent>();
-        public List<ClickableTextureComponent> skillAreas = new List<ClickableTextureComponent>();
         private string hoverText = "";
         private string hoverTitle = "";
         private int skillOrderIndex = -1;
@@ -30,24 +28,12 @@ namespace EquivalentExchange
       0,
       2
         };
-        public const int region_special1 = 10201;
-        public const int region_special2 = 10202;
-        public const int region_special3 = 10203;
-        public const int region_special4 = 10204;
-        public const int region_special5 = 10205;
-        public const int region_special6 = 10206;
-        public const int region_special7 = 10207;
-        public const int region_skillArea1 = 0;
-        public const int region_skillArea2 = 1;
-        public const int region_skillArea3 = 2;
-        public const int region_skillArea4 = 3;
-        public const int region_skillArea5 = 4;
         private int playerPanelIndex;
         private int playerPanelTimer;
         private Rectangle playerPanel;
 
         public AlchemySkillsPage(int x, int y, int width, int height, int skillOrderIndex)
-          : base(x, y, width, height, false)
+          : base(x, y, width, height)
         {
             this.skillOrderIndex = skillOrderIndex;
             int x1 = this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + Game1.tileSize * 5 / 4;
@@ -77,21 +63,21 @@ namespace EquivalentExchange
             
             if (this.skillBars.Count > 1 && this.skillBars.Last<ClickableTextureComponent>().myID >= 200 && this.skillBars[this.skillBars.Count - 2].myID >= 200)
                 this.skillBars.Last<ClickableTextureComponent>().upNeighborID = this.skillBars[this.skillBars.Count - 2].myID;
-           
-            //dead code for vanilla hover over, we can just write a custom one.
-            //string hoverText = "";
-            //List<ClickableTextureComponent> skillAreas = this.skillAreas;
-            //ClickableTextureComponent textureComponent = new ClickableTextureComponent("Alchemy", new Rectangle(xStart - Game1.tileSize * 2 - Game1.tileSize * 3 / 4, yStart + skillOrderIndex * (Game1.tileSize / 2 + Game1.pixelZoom * 6), Game1.tileSize * 2 + Game1.pixelZoom * 5, 9 * Game1.pixelZoom), string.Concat((object)skillOrderIndex), hoverText, (Texture2D)null, Rectangle.Empty, 1f, false);
-            //int num2 = skillOrderIndex;
-            //textureComponent.myID = num2;
-            //int num3 = skillOrderIndex < 4 ? skillOrderIndex + 1 : 10201;
-            //textureComponent.downNeighborID = num3;
-            //int num4 = skillOrderIndex > 0 ? skillOrderIndex - 1 : 12341;
-            //textureComponent.upNeighborID = num4;
-            //int num9 = 100 + skillOrderIndex;
-            //textureComponent.rightNeighborID = num9;
-            //skillAreas.Add(textureComponent);
-            
+
+            // dead code for vanilla hover over, we can just write a custom one.
+            string hoverText = "";
+            List<ClickableTextureComponent> skillAreas = this.skillAreas;
+            ClickableTextureComponent textureComponent = new ClickableTextureComponent("Alchemy", new Rectangle(xStart - Game1.tileSize * 2 - Game1.tileSize * 3 / 4, yStart + skillOrderIndex * (Game1.tileSize / 2 + Game1.pixelZoom * 6), Game1.tileSize * 2 + Game1.pixelZoom * 5, 9 * Game1.pixelZoom), string.Concat((object)skillOrderIndex), GetHoverTextForLevel(), (Texture2D)null, Rectangle.Empty, 1f, false);
+            int num2 = skillOrderIndex;
+            textureComponent.myID = num2;
+            int num3 = skillOrderIndex < 4 ? skillOrderIndex + 1 : 10201;
+            textureComponent.downNeighborID = num3;
+            int num4 = skillOrderIndex > 0 ? skillOrderIndex - 1 : 12341;
+            textureComponent.upNeighborID = num4;
+            int num9 = 100 + skillOrderIndex;
+            textureComponent.rightNeighborID = num9;
+            skillAreas.Add(textureComponent);
+
         }
 
         private void parseProfessionDescription(ref string professionBlurb, ref string professionTitle, List<string> professionDescription)
@@ -130,6 +116,7 @@ namespace EquivalentExchange
             this.hoverText = "";
             this.hoverTitle = "";
             this.professionImage = null;
+            //Log.debug($"Mouse position: {x} x {y}");            
             foreach (ClickableTextureComponent skillBar in this.skillBars)
             {
                 skillBar.scale = (float)Game1.pixelZoom;
@@ -143,6 +130,8 @@ namespace EquivalentExchange
             }
             foreach (ClickableTextureComponent skillArea in this.skillAreas)
             {
+                //Log.debug($"Expected skill area position of: {skillArea.bounds.Left} left to {skillArea.bounds.Right} right.");
+                //Log.debug($"Expected skill area position of: {skillArea.bounds.Top} top to {skillArea.bounds.Bottom} bottom.");
                 if (skillArea.containsPoint(x, y) && skillArea.hoverText.Length > 0)
                 {
                     this.hoverText = skillArea.hoverText;
@@ -164,7 +153,12 @@ namespace EquivalentExchange
 
         public override void draw(SpriteBatch b)
         {
-            this.performHoverAction(Game1.getMouseX(), Game1.getMouseY());
+            var fakeSkillsPage = new SkillsPage(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height);
+
+            // simulate vanilla's draw, because the ordering is rekt by this method. We'll do something else with hovertext momentarily.
+            // fakeSkillsPage.draw(b);
+            base.draw(b);
+
             int num3 = LocalizedContentManager.CurrentLanguageCode == LocalizedContentManager.LanguageCode.ru ? this.xPositionOnScreen + this.width - Game1.tileSize * 7 - Game1.tileSize * 3 / 4 : this.xPositionOnScreen + IClickableMenu.borderWidth + IClickableMenu.spaceToClearTopBorder + 4 * Game1.tileSize - 8;
             int num4 = this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + IClickableMenu.borderWidth - Game1.pixelZoom * 2;
             int num5 = 0;
@@ -226,12 +220,38 @@ namespace EquivalentExchange
             }
             Game1.drawDialogueBox(this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + Game1.tileSize / 2, this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + (int)((double)this.height / 2.0) - Game1.tileSize / 2, this.width - Game1.tileSize - IClickableMenu.spaceToClearSideBorder * 2, this.height / 4 + Game1.tileSize, false, true, (string)null, false);
             this.drawBorderLabel(b, Game1.content.LoadString("Strings\\StringsFromCSFiles:SkillsPage.cs.11610"), Game1.smallFont, this.xPositionOnScreen + IClickableMenu.spaceToClearSideBorder + Game1.tileSize * 3 / 2, this.yPositionOnScreen + IClickableMenu.spaceToClearTopBorder + (int)((double)this.height / 2.0) - Game1.tileSize / 2);
+            
             // hack to draw the mouse to prevent weird z fighting
             this.drawMouse(b);
-            // early abort if we don't have any hover text to show the user.
-            if (this.hoverText.Length <= 0)
-                return;
-            IClickableMenu.drawHoverText(b, this.hoverText, Game1.smallFont, 0, 0, -1, this.hoverTitle.Length > 0 ? this.hoverTitle : (string)null, -1, (string[])null, (Item)null, 0, -1, -1, -1, -1, 1f, (CraftingRecipe)null);
+
+            this.performHoverAction(Game1.getMouseX(), Game1.getMouseY());
+
+            fakeSkillsPage.performHoverAction(Game1.getMouseX(), Game1.getMouseY());
+
+            // draw hover text if we think we should.
+            if (this.hoverText.Length > 0)
+            {
+                IClickableMenu.drawHoverText(b, this.hoverText, Game1.smallFont, 0, 0, -1, this.hoverTitle.Length > 0 ? this.hoverTitle : (string)null, -1, (string[])null, (Item)null, 0, -1, -1, -1, -1, 1f, (CraftingRecipe)null);
+            }
+
+            // now redraw fakeskillpage's hover text, because z fighting is rekt
+            var fakeSkillsHoverTextReflector = fakeSkillsPage.GetType().GetField("hoverText", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var fakeSkillsHoverText = (string)fakeSkillsHoverTextReflector.GetValue(fakeSkillsPage);
+
+            var fakeSkillsHoverTitleReflector = fakeSkillsPage.GetType().GetField("hoverTitle", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var fakeSkillsHoverTitle = (string)fakeSkillsHoverTitleReflector.GetValue(fakeSkillsPage);
+
+            if (fakeSkillsHoverText.Length > 0)
+            {
+                IClickableMenu.drawHoverText(b, fakeSkillsHoverText, Game1.smallFont, 0, 0, -1, fakeSkillsHoverTitle.Length > 0 ? fakeSkillsHoverTitle : (string)null, -1, (string[])null, (Item)null, 0, -1, -1, -1, -1, 1f, (CraftingRecipe)null);
+            }
+        }
+
+        public static string GetHoverTextForLevel()
+        {
+            var hoverTextString1 = EquivalentExchange.instance.Helper.Translation.Get("SkillHoverText1", new { energy = $"{(EquivalentExchange.AlchemyLevel * 10)}" });
+            var hoverTextString2 = EquivalentExchange.instance.Helper.Translation.Get("SkillHoverText2", new { efficiency = $"{(EquivalentExchange.AlchemyLevel / 2)}" });
+            return hoverTextString1 + Environment.NewLine + hoverTextString2;
         }
     }
 }

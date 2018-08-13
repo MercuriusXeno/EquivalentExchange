@@ -59,7 +59,7 @@ namespace EquivalentExchange
             EquivalentExchange.AddAlchemyExperience((int)Math.Floor(Math.Max(energyCost, 1D)));
         }
 
-        public static void HandleTransmuteEvent(Item heldItem, int actualValue)
+        public static bool HandleTransmuteEvent(Item heldItem, int actualValue)
         {
 
             // if the recipes list doesn't contain the item you're holding, you can't transmute that.
@@ -70,7 +70,7 @@ namespace EquivalentExchange
 
             if (validRecipes.Count == 0)
             {
-                return;
+                return true;
             }
 
             // use more sorting magic to find a potential recipe from the player's inventory
@@ -81,10 +81,17 @@ namespace EquivalentExchange
             // or doesn't have the energy to do the transmutation.
             if (optimalRecipe == null)
             {
-                return;
+                return true;
             }
 
+            var breakRepeaterLoop = false;
+
             Alchemy.HandleAlchemyEnergyDeduction(optimalRecipe.GetEnergyCost(), false);
+
+            if (optimalRecipe.GetEnergyCost() > EquivalentExchange.CurrentEnergy)
+            {
+                breakRepeaterLoop = true;
+            }
             
             Alchemy.IncreaseTotalTransmuteValue((int)Math.Floor(Math.Max(1D, optimalRecipe.GetEnergyCost())));
                         
@@ -96,6 +103,8 @@ namespace EquivalentExchange
             Util.GiveItemToPlayer((StardewValley.Object)spawnedItem, Game1.player);            
 
             SoundUtil.PlayMagickySound();
+
+            return breakRepeaterLoop;
         }        
         
         public static void IncreaseTotalTransmuteValue(int transmuteValue)
@@ -587,7 +596,7 @@ namespace EquivalentExchange
         private static void SpawnHayAnimationSprite(GameLocation currentPlayerLocation, Vector2 offsetPosition, StardewValley.Farmer player)
         {
             currentPlayerLocation.temporarySprites.Add(new TemporaryAnimatedSprite(28, offsetPosition * (float)Game1.tileSize + new Vector2((float)Game1.random.Next(-Game1.pixelZoom * 4, Game1.pixelZoom * 4), (float)Game1.random.Next(-Game1.pixelZoom * 4, Game1.pixelZoom * 4)), Color.Green, 8, Game1.random.NextDouble() < 0.5, (float)Game1.random.Next(60, 100), 0, -1, -1f, -1, 0));
-            currentPlayerLocation.temporarySprites.Add(new TemporaryAnimatedSprite(Game1.objectSpriteSheet.Name, Game1.getSourceRectForStandardTileSheet(Game1.objectSpriteSheet, 178, 16, 16), 750f, 1, 0, player.position - new Vector2(0.0f, (float)(Game1.tileSize * 2)), false, false, player.position.Y / 10000f, 0.005f, Color.White, (float)Game1.pixelZoom, -0.005f, 0.0f, 0.0f, false)
+            currentPlayerLocation.temporarySprites.Add(new TemporaryAnimatedSprite("Maps\\springobjects", Game1.getSourceRectForStandardTileSheet(Game1.objectSpriteSheet, 178, 16, 16), 750f, 1, 0, player.position - new Vector2(0.0f, (float)(Game1.tileSize * 2)), false, false, player.position.Y / 10000f, 0.005f, Color.White, (float)Game1.pixelZoom, -0.005f, 0.0f, 0.0f, false)
             {
                 motion = { Y = -1f },
                 layerDepth = (float)(1.0 - (double)Game1.random.Next(100) / 10000.0),

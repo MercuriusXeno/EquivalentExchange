@@ -247,12 +247,12 @@ namespace EquivalentExchange
         public static int CurrentRegenResolution => CurrentDefaultTickInterval / 100;
         private static void RegenerateAlchemyBar()
         {
-            // Log.debug("Regen debug out:");
-            // Log.debug($"Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu != null || !Game1.shouldTimePass()");
-            // Log.debug($"{Game1.menuUp}{Game1.paused}{Game1.dialogueUp}{Game1.activeClickableMenu != null}{!Game1.shouldTimePass() }");
+            //Log.debug("Regen debug out:");
+            //Log.debug($"Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu != null || !Game1.shouldTimePass()");
+            //Log.debug($"{Game1.menuUp}    {Game1.paused}    {Game1.dialogueUp}    {Game1.activeClickableMenu != null}    {!Game1.shouldTimePass() }");
             //checking for paused or menuUp doesn't return true for some reason, but this is
             //a reliable way to check to see if the player is in a menu to prevent regen.
-            if (Game1.menuUp || Game1.paused || Game1.dialogueUp || Game1.activeClickableMenu != null || !Game1.shouldTimePass())
+            if (!Game1.shouldTimePass() || Game1.HostPaused)
                 return;
             // Log.debug($"Game tick interval: {Game1.gameTimeInterval}");
 
@@ -840,6 +840,8 @@ namespace EquivalentExchange
             }
         }
 
+        private static bool brokeRepeaterDueToNoEnergy = false;
+
         //handles the release key event for figuring out if control or shift is let go of
         public static void ControlEvents_KeyReleased(object sender, EventArgsKeyPressed e)
         {
@@ -850,6 +852,7 @@ namespace EquivalentExchange
             //the key for transmuting is pressed, fire once and then initiate the callback routine to auto-fire.
             if (instance.Config.TransmuteKey.Equals(e.KeyPressed.ToString()))
             {
+                brokeRepeaterDueToNoEnergy = false;
                 transmuteKeyHeld = false;
                 instance.heldCounter = 1;
                 instance.updateTickCount = AUTO_REPEAT_UPDATE_RATE_REFRESH;
@@ -933,7 +936,13 @@ namespace EquivalentExchange
                         //try to transmute [copy] the item
                         if (keyPressed.ToString() == instance.Config.TransmuteKey)
                         {
-                            Alchemy.HandleTransmuteEvent(heldItem, actualValue);
+                            var shouldBreakOutOfRepeater = Alchemy.HandleTransmuteEvent(heldItem, actualValue);
+                            if (shouldBreakOutOfRepeater && !brokeRepeaterDueToNoEnergy)
+                            {
+                                brokeRepeaterDueToNoEnergy = true;
+                                instance.heldCounter = 1;
+                                instance.updateTickCount = AUTO_REPEAT_UPDATE_RATE_REFRESH * 2;
+                            }
                         }
 
                         //try to normalize the item [make all items of a different quality one quality and exchange any remainder for gold]

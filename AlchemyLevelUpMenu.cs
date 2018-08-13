@@ -125,7 +125,8 @@ namespace EquivalentExchange
             };
             if (level % 2 == 0)
             {
-                infoList.Add(EquivalentExchange.instance.Helper.Translation.Get("LevelUpEven"));
+                infoList.Add(EquivalentExchange.instance.Helper.Translation.Get("LevelUpEven1"));
+                infoList.Add(EquivalentExchange.instance.Helper.Translation.Get("LevelUpEven2"));
             }
             return infoList;
         }
