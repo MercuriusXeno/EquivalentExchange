@@ -13,12 +13,6 @@ namespace EquivalentExchange
 {
     public class Alchemy
     {
-        //the energy cost of executing a single action of a tool transmutation
-        public static int ENERGY_COST_OF_TOOL_TRANSMUTES = 1;
-
-        //the stamina cost of executing a single action of a tool transmutation
-        public static int STAMINA_COST_OF_TOOL_TRANSMUTES = 6;
-
         //default experience progression values, only multiplied by 10... that I'm gonna try to balance around, somehow.
         public static readonly int[] alchemyExperienceNeededPerLevel = new int[] { 1000, 3800, 7700, 13000, 21500, 33000, 48000, 69000, 100000, 150000 };
 
@@ -231,7 +225,7 @@ namespace EquivalentExchange
                 {
                     if (!isScythe)
                     {
-                        if (!IsCapableOfWithstandingToolTransmuteCost(Game1.player))
+                        if (!IsCapableOfWithstandingToolTransmuteCost(Game1.player, 2F))
                             return;
                     }
 
@@ -246,7 +240,7 @@ namespace EquivalentExchange
                             RestorePlayerExperience(snapshotPlayerExperience);
                             if (performedAction && !isScythe)
                             {
-                                HandleToolTransmuteConsequence();
+                                HandleToolTransmuteConsequence(2F);
                             }
 
                         }
@@ -266,7 +260,7 @@ namespace EquivalentExchange
 
                             if (performedAction)
                             {
-                                HandleToolTransmuteConsequence();
+                                HandleToolTransmuteConsequence(2F);
                             }
                         }
                         else if (terrainFeature is Grass && location is Farm && isScythe)
@@ -297,7 +291,7 @@ namespace EquivalentExchange
                                 RestorePlayerExperience(snapshotPlayerExperience);
                                 (tool as WateringCan).WaterLeft = (tool as WateringCan).WaterLeft - 1;
                                 SpawnWateringCanAnimationSprite(location, offsetPosition);
-                                HandleToolTransmuteConsequence();
+                                HandleToolTransmuteConsequence(2F);
                                 performedAction = true;
                             }
                         }
@@ -309,7 +303,7 @@ namespace EquivalentExchange
 
                             if (performedAction)
                             {
-                                HandleToolTransmuteConsequence();
+                                HandleToolTransmuteConsequence(2F);
                             }
                         }
                     }
@@ -338,7 +332,7 @@ namespace EquivalentExchange
 
                         if (performedAction)
                         {
-                            HandleToolTransmuteConsequence();
+                            HandleToolTransmuteConsequence(2F);
                         }
                     }
                 }
@@ -369,7 +363,7 @@ namespace EquivalentExchange
 
                         if (performedAction)
                         {
-                            HandleToolTransmuteConsequence();
+                            HandleToolTransmuteConsequence(2F);
                         }
                         break;
                     }
@@ -575,7 +569,7 @@ namespace EquivalentExchange
                             Game1.createMultipleObjectDebris(709, (int)offsetPosition.X, (int)offsetPosition.Y, number2);
                         Game1.playSound("stumpCrack");
                         Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(23, offsetPosition * (float)Game1.tileSize, Color.White, 4, false, 140f, 0, Game1.tileSize * 2, -1f, Game1.tileSize * 2, 0));
-                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite(Game1.animations.Name, new Rectangle(385, 1522, (int)sbyte.MaxValue, 79), 2000f, 1, 1, offsetPosition * (float)Game1.tileSize + new Vector2(0.0f, 49f), false, false, 1E-05f, 0.016f, Color.White, 1f, 0.0f, 0.0f, 0.0f, false));
+                        Game1.currentLocation.temporarySprites.Add(new TemporaryAnimatedSprite("TileSheets\\animations", new Rectangle(385, 1522, (int)sbyte.MaxValue, 79), 2000f, 1, 1, offsetPosition * (float)Game1.tileSize + new Vector2(0.0f, 49f), false, false, 1E-05f, 0.016f, Color.White, 1f, 0.0f, 0.0f, 0.0f, false));
                         Game1.createRadialDebris(Game1.currentLocation, 34, (int)offsetPosition.X, (int)offsetPosition.Y, Game1.random.Next(4, 9), false, -1, false, -1);
                         return performedAction;
                 }
@@ -604,29 +598,28 @@ namespace EquivalentExchange
             });
         }
 
-        private static double GetToolTransmutationEnergyCost(double level)
+        private static double GetToolTransmutationEnergyCost(double level, float cost)
         {
-            double increase = Math.Floor(level / 2D);
-            return ENERGY_COST_OF_TOOL_TRANSMUTES + increase;
+            return cost;
         }
 
-        private static double GetToolTransmutationStaminaCost(double level)
+        private static double GetToolTransmutationStaminaCost(double level, float cost)
         {
             double reduction = Math.Floor(level / 2D);
-            return STAMINA_COST_OF_TOOL_TRANSMUTES - reduction;
+            return cost / reduction;
         }
 
-        private static void HandleToolTransmuteConsequence()
+        private static void HandleToolTransmuteConsequence(float cost)
         {
-            Alchemy.HandleAlchemyEnergyDeduction(GetToolTransmutationEnergyCost(EquivalentExchange.AlchemyLevel), false);
-            Alchemy.HandleAlchemyEnergyDeduction(GetToolTransmutationStaminaCost(EquivalentExchange.AlchemyLevel), true);            
-            Alchemy.IncreaseTotalTransmuteValue(ENERGY_COST_OF_TOOL_TRANSMUTES);
+            Alchemy.HandleAlchemyEnergyDeduction(GetToolTransmutationEnergyCost(EquivalentExchange.AlchemyLevel, cost), false);
+            Alchemy.HandleAlchemyEnergyDeduction(GetToolTransmutationStaminaCost(EquivalentExchange.AlchemyLevel, cost), true);            
+            Alchemy.IncreaseTotalTransmuteValue((int)Math.Floor(cost));
         }
 
-        public static bool IsCapableOfWithstandingToolTransmuteCost(Farmer player)
+        public static bool IsCapableOfWithstandingToolTransmuteCost(Farmer player, float cost)
         {
-            var energyCost = GetToolTransmutationEnergyCost(EquivalentExchange.AlchemyLevel);
-            var staminaCost = GetToolTransmutationStaminaCost(EquivalentExchange.AlchemyLevel);
+            var energyCost = GetToolTransmutationEnergyCost(EquivalentExchange.AlchemyLevel, cost);
+            var staminaCost = GetToolTransmutationStaminaCost(EquivalentExchange.AlchemyLevel, cost);
             double energyCostHandled = Math.Min(EquivalentExchange.CurrentEnergy, energyCost);
             double energyCostOverflow = Math.Max(0D, energyCost - energyCostHandled);
             staminaCost += energyCostOverflow;
