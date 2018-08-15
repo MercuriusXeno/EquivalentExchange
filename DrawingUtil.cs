@@ -12,50 +12,6 @@ namespace EquivalentExchange
 {
     class DrawingUtil
     {
-        public static void DoPostRenderHudEvent()
-        {
-
-            if (Game1.activeClickableMenu != null)
-                return;
-
-            Type t = Type.GetType("ExperienceBars.Mod, ExperienceBars");
-
-            int currentAlchemyLevel = EquivalentExchange.AlchemyLevel;
-            int currentAlchemyExperience = EquivalentExchange.AlchemyExperience;
-            int x = 10;
-            int y = (int)Util.GetStaticField(t, "expBottom");
-
-            int previousExperienceRequired = 0, nextExperienceRequired = 1;
-            if (currentAlchemyLevel == 0)
-            {
-                nextExperienceRequired = Alchemy.GetAlchemyExperienceNeededForNextLevel(currentAlchemyLevel);
-            }
-            else if (currentAlchemyLevel != 10)
-            {
-                previousExperienceRequired = Alchemy.GetAlchemyExperienceNeededForLevel(currentAlchemyLevel - 1);
-                nextExperienceRequired = Alchemy.GetAlchemyExperienceNeededForLevel(currentAlchemyLevel);
-            }
-
-            int progressTowardCurrentLevel = currentAlchemyExperience - previousExperienceRequired;
-            int experienceGapForCurrentLevel = nextExperienceRequired - previousExperienceRequired;
-            float progressBarPercentage = (float)progressTowardCurrentLevel / experienceGapForCurrentLevel;
-            if (currentAlchemyLevel == 10)
-            {
-                progressBarPercentage = -1;
-            }
-
-            object[] args = new object[]
-            {
-                x, y,
-                alchemySkillIcon, new Rectangle( 0, 0, 16, 16 ),
-                currentAlchemyLevel, progressBarPercentage,
-                new Color( 196, 79, 255 ),
-            };
-            Util.CallStaticMethod(t, "renderSkillBar", args);
-
-            Util.SetStaticField(t, "expBottom", y + 40);
-        }
-
         public struct Icons
         {
             public static string SkillIcon = $"alchemySkillIconDeeper.png";
@@ -102,17 +58,17 @@ namespace EquivalentExchange
         {
             switch (profession)
             {
-                case (int)Professions.Shaper:
+                case (int)ProfessionHelper.OldShaperId:
                     return alchemyShaperIcon;
-                case (int)Professions.Sage:
+                case (int)ProfessionHelper.OldSageId:
                     return alchemySageIcon;
-                case (int)Professions.Transmuter:
+                case (int)ProfessionHelper.OldTransmuterId:
                     return alchemyTransmuterIcon;
-                case (int)Professions.Adept:
+                case (int)ProfessionHelper.OldAdeptId:
                     return alchemyAdeptIcon;
-                case (int)Professions.Aurumancer:
+                case (int)ProfessionHelper.OldAurumancerId:
                     return alchemyAurumancerIcon;
-                case (int)Professions.Conduit:
+                case (int)ProfessionHelper.OldConduitId:
                     return alchemyConduitIcon;
             }
             return alchemySkillIconBordered;

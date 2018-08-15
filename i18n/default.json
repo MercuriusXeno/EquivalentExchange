@@ -1,7 +1,8 @@
 ﻿{    
     "Level": "Level",
     "Alchemy": "Alchemy",
-    "LevelUp": "Energy limit increased by 10.",
+    "LevelUp": "Energy limit increased by 25.",
+	"LevelUp2": "Regeneration rate increased.",
 	"LevelUpEven": "+1 Tool transmutation efficiency",
 	"SkillHoverText1": "Energy limits +{{energy}}",
 	"SkillHoverText2": "Tool transmute efficiency +{{efficiency}}",

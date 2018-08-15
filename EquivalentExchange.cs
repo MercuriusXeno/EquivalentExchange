@@ -22,17 +22,20 @@ namespace EquivalentExchange
     /// <summary>The mod entry point.</summary>
     public class EquivalentExchange : Mod
     {
-        //instantiate config
+        // instantiate config
         private ConfigurationModel Config;
 
-        //the mod's "static" instance, initialized by Entry. There caN ONly bE ONe
+        // the mod's "static" instance, initialized by Entry. There caN ONly bE ONe
         public static EquivalentExchange instance;
 
         // holds the player data for all active players, then uses statics to expose this player's data.
         public SaveDataModel currentPlayerData = new SaveDataModel();
 
-        //config for if the mod is allowed to play sounds
+        // config for if the mod is allowed to play sounds
         public static bool canPlaySounds;
+
+        // new stuff for space's skills api
+        public static AlchemySkill skill;
 
         public const string MSG_DATA = "EquivalentExchange.AlchemySkill.Data";
         public const string MSG_EXPERIENCE = "EquivalentExchange.AlchemySkill.Experience";
@@ -71,23 +74,7 @@ namespace EquivalentExchange
 
             //wire up the PreRenderHUD event so I can display info bubbles when needed
             GraphicsEvents.OnPreRenderHudEvent += GraphicsEvents_OnPreRenderHudEvent;
-
-            //check for all professions mod: if it's here we run a wireup to give the player all skills professions at the right time (or after), when present.
-            CheckForAllProfessionsMod();
-
-            //location wireup to detect displacement from leylines for debug reasons
-            LocationEvents.LocationsChanged += LocationEvents_LocationsChanged; ;
-
-            //check for experience bars mod: if it's here we draw hud elements for the new alchemy skill
-            CheckForExperienceBarsMod();
-            if (hasExperienceBarsMod)
-            {
-                GraphicsEvents.OnPostRenderHudEvent += GraphicsEvents_OnPostRenderHudEvent;
-            }
-
-            //post render event for skills menu
-            GraphicsEvents.OnPostRenderGuiEvent += DrawAfterGUI;
-
+            
             // handles end of night event requirements like alchemy energy being restored and level ups.
             SpaceEvents.ShowNightEndMenus += SpaceEvents_ShowNightEndMenus;
 
@@ -102,16 +89,13 @@ namespace EquivalentExchange
             Networking.RegisterMessageHandler(MSG_TOTAL_VALUE_TRANSMUTED, OnTransmutedValueMessage);
             Networking.RegisterMessageHandler(MSG_REGEN_TICK, OnRegenTick);
 
-            //check for chase's skills
-            CheckForLuck();
-            CheckForCooking();
+            Skills.RegisterSkill(skill = new AlchemySkill());
         }
 
         private void SpaceEvents_ShowNightEndMenus(object sender, EventArgsShowNightEndMenus e)
         {
             //the new day hook seems to be inconsistent, so this is a full restore at the end of the night.
             Alchemy.RestoreAlkahestryEnergyForNewDay();
-            AddEndOfNightMenus();
         }
 
         private void SpaceEvents_ServerGotClient(object sender, EventArgsServerGotClient e)
@@ -162,10 +146,7 @@ namespace EquivalentExchange
                     writer.Write(totalValue.Key);
                     writer.Write(totalValue.Value);
                 }
-
-
-                Log.info($"Player data being broadcasted to { e.FarmerID }.");
-                Log.info($"Total objects { PlayerData.AlchemyLevel.Count }");
+                
                 Networking.ServerSendTo(e.FarmerID, MSG_DATA, stream.ToArray());
             }
         }
@@ -193,6 +174,12 @@ namespace EquivalentExchange
         private void OnExpMessage(IncomingMessage msg)
         {
             PlayerData.AlchemyExperience[msg.FarmerID] = msg.Reader.ReadInt32();
+            if (msg.FarmerID != Game1.player.UniqueMultiplayerID)
+                return;
+            if (Game1.player.GetCustomSkillExperience(skill) < PlayerData.AlchemyExperience[msg.FarmerID])
+            {
+                AddAlchemyExperience(PlayerData.AlchemyExperience[msg.FarmerID] - Game1.player.GetCustomSkillExperience(skill));
+            }
         }
 
         // unabashedly stolen from spacechase, like all things.
@@ -202,22 +189,25 @@ namespace EquivalentExchange
             // Log.debug("Receiving updated data from server.");
             int count = msg.Reader.ReadInt32();
 
-            Log.info($"Player data objects found: { count }.");
-
-            // Log.debug($"Count of { count }");
-
             for (int i = 0; i < count; ++i)
             {
                 long id = msg.Reader.ReadInt64();
                 int level = msg.Reader.ReadInt32();
-                PlayerData.AlchemyLevel[id] = level;
+                // PlayerData.AlchemyLevel[id] = level;
             }
 
             for (int i = 0; i < count; ++i)
             {
                 long id = msg.Reader.ReadInt64();
                 int experience = msg.Reader.ReadInt32();
-                PlayerData.AlchemyExperience[id] = experience;
+                // PlayerData.AlchemyExperience[id] = experience;
+                if (id == Game1.player.UniqueMultiplayerID)
+                {
+                    if (Game1.player.GetCustomSkillExperience(skill) < experience)
+                    {
+                        AddAlchemyExperience(experience - Game1.player.GetCustomSkillExperience(skill));
+                    }
+                }
             }
 
             for (int i = 0; i < count; ++i)
@@ -295,7 +285,7 @@ namespace EquivalentExchange
         {
             // handles this player's regen
             double regenAlchemyBar = Math.Sqrt(AlchemyLevel + 1) / 10D;
-            regenAlchemyBar *= MaxEnergy / 100D;
+            regenAlchemyBar *= MaxEnergy / 200D;
             CurrentEnergy = (float)Math.Min(CurrentEnergy + Math.Max(0.05D, regenAlchemyBar), MaxEnergy);
         }
 
@@ -303,54 +293,7 @@ namespace EquivalentExchange
         {
             get { return EquivalentExchange.instance.currentPlayerData; }
             set { EquivalentExchange.instance.currentPlayerData = value; }
-        }
-
-        public static int AlchemyExperience
-        {
-            get {
-                if (!PlayerData.AlchemyExperience.ContainsKey(PlayerId))
-                    return 0;
-                // Log.debug($"Current alchemy experience is {PlayerData.AlchemyExperience[PlayerId]}");
-                return PlayerData.AlchemyExperience[PlayerId];
-            }
-            set
-            {
-                if (!PlayerData.AlchemyExperience.ContainsKey(PlayerId) || PlayerData.AlchemyExperience[PlayerId] != value)
-                {
-                    PlayerData.AlchemyExperience[PlayerId] = value;
-                    using (var stream = new MemoryStream())
-                    using (var writer = new BinaryWriter(stream))
-                    {
-                        writer.Write(value);
-                        Networking.BroadcastMessage(MSG_EXPERIENCE, stream.ToArray());
-                    }
-                }
-            }
-        }
-
-        public static int AlchemyLevel
-        {
-            get
-            {
-                if (!PlayerData.AlchemyLevel.ContainsKey(PlayerId))
-                    return 0;
-                // Log.debug($"Current alchemy level is {PlayerData.AlchemyLevel[PlayerId]}");
-                return PlayerData.AlchemyLevel[PlayerId];
-            }
-            set
-            {
-                if (!PlayerData.AlchemyLevel.ContainsKey(PlayerId) || PlayerData.AlchemyLevel[PlayerId] != value)
-                {
-                    PlayerData.AlchemyLevel[PlayerId] = value;
-                    using (var stream = new MemoryStream())
-                    using (var writer = new BinaryWriter(stream))
-                    {
-                        writer.Write(value);
-                        Networking.BroadcastMessage(MSG_LEVEL, stream.ToArray());
-                    }
-                }
-            }
-        }
+        }        
 
         public static float CurrentEnergy
         {
@@ -433,79 +376,19 @@ namespace EquivalentExchange
         {
             TotalValueTransmuted += value;
             // Extremely nerfed formula for alchemy energy training.
-            var updatedMaxEnergy = (int)Math.Floor(Math.Sqrt(TotalValueTransmuted / 10)) + (AlchemyLevel * 10);
+            var updatedMaxEnergy = (int)Math.Floor(Math.Pow(TotalValueTransmuted / 5, 0.6)) + (AlchemyLevel * 25);
             MaxEnergy = updatedMaxEnergy;
         }
 
+        // public static int AlchemyExperience => Game1.player.GetCustomSkillExperience(EquivalentExchange.skill);
+
+        public static int AlchemyLevel => Game1.player.GetCustomSkillLevel(EquivalentExchange.skill);
+
         public static void AddAlchemyExperience(int exp)
         {
-            AlchemyExperience += exp;
-            var originalAlchemyLevel = AlchemyLevel;
-            var resultAlchemyLevel = AlchemyLevel;
-            while (resultAlchemyLevel < 10 && AlchemyExperience >= Alchemy.GetAlchemyExperienceNeededForNextLevel(resultAlchemyLevel))
-            {
-                resultAlchemyLevel += 1;
-
-                //player gained a skilllevel, flag the night time skill up to appear.
-                EquivalentExchange.instance.AddSkillUpMenuAppearance(resultAlchemyLevel);
-            }
-
-            if (originalAlchemyLevel != resultAlchemyLevel)
-            {
-                AlchemyLevel = resultAlchemyLevel;
-            }
-        }
-
-        //integration considerations for chase's skills
-
-        public static bool hasLuck = false;
-
-        private void CheckForLuck()
-        {
-            if (!Helper.ModRegistry.IsLoaded("spacechase0.LuckSkill"))
-            {
-                //Log.info($"{LocalizationStrings.Get(LocalizationStrings.LuckSkillNotFound)}");
-                return;
-            }
-
-            hasLuck = true;
-        }
-
-        public static bool hasCooking = false;
-        private void CheckForCooking()
-        {
-            if (!Helper.ModRegistry.IsLoaded("spacechase0.CookingSkill"))
-            {
-                //Log.info($"{LocalizationStrings.Get(LocalizationStrings.CookingSkillNotFound)}");
-                return;
-            }
-
-            hasCooking = true;
-        }
-
-        //hooked to show the alchemy skill/bar/description/professions on the Skills Page
-        private void DrawAfterGUI(object sender, EventArgs args)
-        {
-            if (Game1.activeClickableMenu is GameMenu)
-            {
-                GameMenu menu = Game1.activeClickableMenu as GameMenu;
-                if (menu.currentTab == GameMenu.skillsTab)
-                {
-                    var tabs = (List<IClickableMenu>)Util.GetInstanceField(typeof(GameMenu), menu, "pages");
-                    var skills = (SkillsPage)tabs[GameMenu.skillsTab];
-                    var alchemySkills = new AlchemySkillsPage(skills.xPositionOnScreen, skills.yPositionOnScreen, skills.width, skills.height, 5 + (hasLuck ? 1 : 0) + (hasCooking ? 1 : 0));
-                    alchemySkills.draw(Game1.spriteBatch);
-                }
-            }
+            Game1.player.AddCustomSkillExperience(EquivalentExchange.skill, exp);
         }
         
-        public List<int> showLevelUpMenusByRank = new List<int>();
-
-        internal void AddSkillUpMenuAppearance(int alchemyLevel)
-        {
-            showLevelUpMenusByRank.Add(alchemyLevel);
-        }
-
         //internal default value for the repeat rate starting point of the auto-fire functionality of transmute/liquidate when the buttons are held.
         private const int AUTO_REPEAT_UPDATE_RATE_REFRESH = 20;
 
@@ -545,83 +428,7 @@ namespace EquivalentExchange
                     updateTickCount = (int)Math.Floor(Math.Max(1, updateTickCount * 0.9F));
                 }
             }
-        }
-
-        //show the level up menus at night when you hit a profession breakpoint.
-        private void AddEndOfNightMenus()
-        {
-            // hack to fix.. something. Recommended by space to avoid errors.
-            if (Game1.endOfNightMenus.Count == 0)
-                Game1.endOfNightMenus.Push(new SaveGameMenu());
-
-            bool playerNeedsLevelFiveProfession = AlchemyLevel >= 5 && !Game1.player.professions.Contains((int)Professions.Shaper) && !Game1.player.professions.Contains((int)Professions.Sage);
-            bool playerNeedsLevelTenProfession = AlchemyLevel >= 10 && !Game1.player.professions.Contains((int)Professions.Transmuter) && !Game1.player.professions.Contains((int)Professions.Adept) && !Game1.player.professions.Contains((int)Professions.Aurumancer) && !Game1.player.professions.Contains((int)Professions.Conduit);
-            bool playerGainedALevel = showLevelUpMenusByRank.Count() > 0;
-
-            //nothing requires our intervention, bypass this method
-            if (!playerGainedALevel && !playerNeedsLevelFiveProfession && !playerNeedsLevelTenProfession)
-                return;
-
-            if (playerGainedALevel)
-            {
-                for (int i = showLevelUpMenusByRank.Count() - 1; i >= 0; --i)
-                {
-                    int level = showLevelUpMenusByRank[i];
-                    //search for existing levelups already injected into the night menu routine.
-                    List<IClickableMenu> existingLevelUps = Game1.endOfNightMenus.Where(x => x.GetType().Equals(typeof(AlchemyLevelUpMenu)) && ((AlchemyLevelUpMenu)x).GetLevel() == level).ToList();
-                    //excuse the plural, this check is testing for *this level* specifically.
-                    if (existingLevelUps.Count == 0)
-                    {
-                        Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(level));
-                    }
-                }
-                //presume we've added all the levels we need, wipe this thing.
-                showLevelUpMenusByRank.Clear();
-            }
-            else if (playerNeedsLevelFiveProfession)
-            {
-                List<IClickableMenu> existingLevelUps = Game1.endOfNightMenus.Where(x => x.GetType().Equals(typeof(AlchemyLevelUpMenu)) && ((AlchemyLevelUpMenu)x).GetLevel() == 5).ToList();
-                if (existingLevelUps.Count == 0)
-                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(5));
-            }
-            else if (playerNeedsLevelTenProfession)
-            {
-                List<IClickableMenu> existingLevelUps = Game1.endOfNightMenus.Where(x => x.GetType().Equals(typeof(AlchemyLevelUpMenu)) && ((AlchemyLevelUpMenu)x).GetLevel() == 10).ToList();
-                if (existingLevelUps.Count == 0)
-                    Game1.endOfNightMenus.Push(new AlchemyLevelUpMenu(10));
-            }
-        }
-
-        //misleading event wireup is actually for the has-all-professions mod, which enables all professions at the appropriate level.
-        private void LocationEvents_LocationsChanged(object sender, EventArgsLocationsChanged e)
-        {
-            if (hasAllProfessionsMod)
-            {
-                NetList<int, NetInt> professions = Game1.player.professions;
-                List<List<int>> list = new List<List<int>> { Professions.firstRankProfessions, Professions.secondRankProfessions };
-                foreach (List<int> current in list)
-                {
-                    bool flag = professions.Intersect(current).Any<int>();
-                    if (flag)
-                    {
-                        foreach (int current2 in current)
-                        {
-                            bool flag2 = !professions.Contains(current2);
-                            if (flag2)
-                            {
-                                professions.Add(current2);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        //hooked for drawing the experience bar on screen when experience bars mod is present.
-        private void GraphicsEvents_OnPostRenderHudEvent(object sender, EventArgs e)
-        {
-            DrawingUtil.DoPostRenderHudEvent();
-        }
+        }        
 
         //fires when loading a save, initializes the item blacklist and loads player save data.
         private void SaveEvents_AfterLoad(object sender, EventArgs e)
@@ -665,43 +472,43 @@ namespace EquivalentExchange
                 }
 
                 // if the player has the "Sage" profession, they can traverse up to 2 steps away.
-                if (index > 1 && HasProfession(Professions.Sage))
+                if (index > 1 && HasProfession(AlchemySkill.ProfessionSage.GetVanillaId()))
                 {
                     recipes.AddRecipeLink(transmutationSteps[index - 2], step);
                 }
-                if (index < transmutationSteps.Count - 2 && HasProfession(Professions.Sage))
+                if (index < transmutationSteps.Count - 2 && HasProfession(AlchemySkill.ProfessionSage.GetVanillaId()))
                 {
                     recipes.AddRecipeLink(transmutationSteps[index + 2], step);
                 }
                 
                 // if the player has the adept profession, you can transmute this thing into slimes no matter what, but transmutations cost double.
-                if (HasProfession(Professions.Adept))
+                if (HasProfession(AlchemySkill.ProfessionAdept.GetVanillaId()))
                 {
                     recipes.AddRecipeLink(step, Reference.Items.Slime, 2);
                 }
 
                 // if the player has the conduit profession, you can create this thing from slimes no matter what, but transmutations cost double.
-                if (HasProfession(Professions.Conduit))
+                if (HasProfession(AlchemySkill.ProfessionConduit.GetVanillaId()))
                 {
                     recipes.AddRecipeLink(Reference.Items.Slime, step, 2);
                 }
 
                 // if the player has the shaper profession you can create stone and clay from slime and vice versa.
-                if (HasProfession(Professions.Shaper) && (step == Reference.Items.Stone || step == Reference.Items.Clay))
+                if (HasProfession(AlchemySkill.ProfessionShaper.GetVanillaId()) && (step == Reference.Items.Stone || step == Reference.Items.Clay))
                 {
                     recipes.AddRecipeLink(Reference.Items.Slime, step);
                     recipes.AddRecipeLink(step, Reference.Items.Slime);
                 }
 
                 // if the player has the transmuter profession you can create wood from slime and vice versa.
-                if (HasProfession(Professions.Transmuter) && step == Reference.Items.Wood)
+                if (HasProfession(AlchemySkill.ProfessionTransmuter.GetVanillaId()) && step == Reference.Items.Wood)
                 {
                     recipes.AddRecipeLink(Reference.Items.Slime, step);
                     recipes.AddRecipeLink(step, Reference.Items.Slime);
                 }
 
                 // if the player has the aurumancer profession, you can create gold from slime and vice versa.
-                if (HasProfession(Professions.Aurumancer) && step == Reference.Items.GoldOre)
+                if (HasProfession(AlchemySkill.ProfessionAurumancer.GetVanillaId()) && step == Reference.Items.GoldOre)
                 {
                     recipes.AddRecipeLink(Reference.Items.Slime, step);
                     recipes.AddRecipeLink(step, Reference.Items.Slime);
@@ -717,7 +524,7 @@ namespace EquivalentExchange
                 //Log.debug($"Transmute: {recipe.GetInputCost()} {inputName} ({inputValue}) into {recipe.GetOutputQuantity()} {outputName} ({outputValue}), costs {recipe.Cost}");
             }
             return recipes;
-        }       
+        }
 
         public static bool HasProfession(int profession)
         {
@@ -740,12 +547,20 @@ namespace EquivalentExchange
                     PlayerData.AlchemyLevel[farmerId] = 0;
                 if (!PlayerData.AlchemyExperience.ContainsKey(farmerId))
                     PlayerData.AlchemyExperience[farmerId] = 0;
+                // sync old experience values into the new system
+                if (Game1.player.GetCustomSkillExperience(skill) < PlayerData.AlchemyExperience[farmerId])
+                {
+                    AddAlchemyExperience(PlayerData.AlchemyExperience[farmerId] - Game1.player.GetCustomSkillExperience(skill));
+                }
                 if (!PlayerData.AlkahestryCurrentEnergy.ContainsKey(farmerId))
                     PlayerData.AlkahestryCurrentEnergy[farmerId] = 0F;
                 if (!PlayerData.AlkahestryMaxEnergy.ContainsKey(farmerId))
                     PlayerData.AlkahestryMaxEnergy[farmerId] = 0F;
                 if (!PlayerData.TotalValueTransmuted.ContainsKey(farmerId))
                     PlayerData.TotalValueTransmuted[farmerId] = 0;
+
+                // clean up deprecated profession data and use the new profession hooks
+                ProfessionHelper.CleanDeprecatedProfessions();
             }
             Log.info("Player data loaded.");
         }
@@ -983,41 +798,6 @@ namespace EquivalentExchange
                 default:
                     break;
             }
-        }
-
-        //// holds a list of transmutation recipes used by the mod.
-        //public static Dictionary<int> transmutationFormulas = new Dictionary<int>({
-        //        Game1.object
-        //    });
-    
-        //hopefully the stuff needed to support spacechase0's show-experience-bars mod can start here
-
-        public static bool hasExperienceBarsMod = false;
-
-        public void CheckForExperienceBarsMod()
-        {
-            if (!Helper.ModRegistry.IsLoaded("spacechase0.ExperienceBars"))
-            {
-                //Log.info($"{LocalizationStrings.Get(LocalizationStrings.ExperienceBarsNotFound)}");
-                return;
-            }
-
-            hasAllProfessionsMod = true;
-
-            //Log.info($"{LocalizationStrings.Get(LocalizationStrings.ExperienceBarsFound)}");
-        }
-
-        public static bool hasAllProfessionsMod = false;
-        public void CheckForAllProfessionsMod()
-        {
-            if (!Helper.ModRegistry.IsLoaded("community.AllProfessions"))
-            {
-                //Log.info($"{LocalizationStrings.Get(LocalizationStrings.AllProfessionsNotFound)}");
-                return;
-            }
-
-            //Log.info($"{LocalizationStrings.Get(LocalizationStrings.AllProfessionsFound)}");
-            hasAllProfessionsMod = true;
         }
     }
 }
