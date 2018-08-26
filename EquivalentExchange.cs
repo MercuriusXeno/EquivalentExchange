@@ -3,12 +3,9 @@ using System.Collections.Generic;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
-using System.Linq;
 using Microsoft.Xna.Framework.Input;
 using EquivalentExchange.Models;
 using System.IO;
-using Netcode;
-using StardewValley.Menus;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewValley.Tools;
@@ -32,7 +29,7 @@ namespace EquivalentExchange
         public SaveDataModel currentPlayerData = new SaveDataModel();
 
         // config for if the mod is allowed to play sounds
-        public static bool canPlaySounds;
+        public static bool canPlaySounds;        
 
         // new stuff for space's skills api
         public static AlchemySkill skill;
@@ -44,6 +41,7 @@ namespace EquivalentExchange
         public const string MSG_MAX_ENERGY = "EquivalentExchange.AlchemySkill.MaxEnergy";
         public const string MSG_TOTAL_VALUE_TRANSMUTED = "EquivalentExchange.AlchemySkill.TotalValueTransumted";
         public const string MSG_REGEN_TICK = "EquivalentExchange.AlchemySkill.RegenTick";
+        public const string MSG_IS_SLIME_GIVEN_TO_WIZARD = "EquivalentExchange.AlchemySkill.GaveWizardSlime";
 
         //handles all the things.
         public override void Entry(IModHelper helper)
@@ -70,7 +68,7 @@ namespace EquivalentExchange
             DrawingUtil.HandleTextureCaching();
 
             //handles high resolution update ticks, like regeneration and held keys.
-            GameEvents.UpdateTick += GameEvents_UpdateTick;
+            GameEvents.UpdateTick += GameEvents_UpdateTick;            
 
             //wire up the PreRenderHUD event so I can display info bubbles when needed
             GraphicsEvents.OnPreRenderHudEvent += GraphicsEvents_OnPreRenderHudEvent;
@@ -81,6 +79,9 @@ namespace EquivalentExchange
             // stuff we have to do for multiplayer now, handles client join events to cascade data to the non-hosts.
             SpaceEvents.ServerGotClient += SpaceEvents_ServerGotClient;
 
+            // handle looking out for the slime gift to the wizard that gates the alchemy content
+            SpaceEvents.AfterGiftGiven += SpaceEvents_AfterGiftGiven;
+
             Networking.RegisterMessageHandler(MSG_DATA, OnDataMessage);
             Networking.RegisterMessageHandler(MSG_EXPERIENCE, OnExpMessage);
             Networking.RegisterMessageHandler(MSG_LEVEL, OnLevelMessage);
@@ -88,8 +89,52 @@ namespace EquivalentExchange
             Networking.RegisterMessageHandler(MSG_MAX_ENERGY, OnMaxEnergyMessage);
             Networking.RegisterMessageHandler(MSG_TOTAL_VALUE_TRANSMUTED, OnTransmutedValueMessage);
             Networking.RegisterMessageHandler(MSG_REGEN_TICK, OnRegenTick);
+            Networking.RegisterMessageHandler(MSG_IS_SLIME_GIVEN_TO_WIZARD, OnSlimeGivenToWizardMessage);
 
             Skills.RegisterSkill(skill = new AlchemySkill());
+        }
+
+        // bools for menuing through the wizard slime-gift dialog
+        public static bool isSlimeGiftDialogComplete = false;
+        public static bool needsToShowSlimeEventDialog = false;
+        public static bool needsToShowAlchemyUnlockedDialog = false;
+
+        private void SpaceEvents_AfterGiftGiven(object sender, EventArgsGiftGiven e)
+        {
+            // this can only fire the first time.
+            if (IsSlimeGivenToWizard)
+                return;
+
+            if (e.Npc.Name.Equals("Wizard") && e.Gift.parentSheetIndex.Equals(Reference.Items.Slime))
+            {
+                IsSlimeGivenToWizard = true;
+                needsToShowSlimeEventDialog = true;
+            }
+        }
+
+        // there are two states we need to preserve. 
+        // The first is whether the player gave the wizard a slime.        
+        // The second is whether the player has unlocked their alchemy ability.
+        // In between those, we can infer that the player hasn't seen the dialog.
+        private void HandleWizardSlimeListener()
+        {
+            if (Game1.dialogueUp)
+                return;
+
+            if (IsSlimeGivenToWizard && needsToShowAlchemyUnlockedDialog)
+            {
+                // Game1.drawDialogueBox(Helper.Translation.Get(Reference.Localizations.AlchemyUnlocked, new { transmuteKey = instance.Config.TransmuteKey.ToString() }));
+                Game1.drawObjectDialogue(Helper.Translation.Get(Reference.Localizations.AlchemyUnlocked, new { transmuteKey = instance.Config.TransmuteKey.ToString() }));
+                needsToShowAlchemyUnlockedDialog = false;
+            }
+
+            if (IsSlimeGivenToWizard && needsToShowSlimeEventDialog)
+            {
+                // show the npc dialog with localizations
+                Game1.drawDialogue(Game1.getCharacterFromName(Reference.Characters.WizardName, true), Helper.Translation.Get(Reference.Localizations.WizardSpeech));
+                needsToShowSlimeEventDialog = false;
+                needsToShowAlchemyUnlockedDialog = true;
+            }
         }
 
         private void SpaceEvents_ShowNightEndMenus(object sender, EventArgsShowNightEndMenus e)
@@ -112,6 +157,8 @@ namespace EquivalentExchange
                 PlayerData.AlkahestryMaxEnergy[farmerId] = 0F;
             if (!PlayerData.TotalValueTransmuted.ContainsKey(farmerId))
                 PlayerData.TotalValueTransmuted[farmerId] = 0;
+            if (!PlayerData.IsSlimeGivenToWizard.ContainsKey(farmerId))
+                PlayerData.IsSlimeGivenToWizard[farmerId] = false;
 
             // Log.debug($"Adding player {farmerId.ToString()} to registry. Keys currently: { PlayerData.AlchemyLevel.Count }");
 
@@ -146,7 +193,12 @@ namespace EquivalentExchange
                     writer.Write(totalValue.Key);
                     writer.Write(totalValue.Value);
                 }
-                
+                foreach (var totalValue in PlayerData.IsSlimeGivenToWizard)
+                {
+                    writer.Write(totalValue.Key);
+                    writer.Write(totalValue.Value);
+                }
+
                 Networking.ServerSendTo(e.FarmerID, MSG_DATA, stream.ToArray());
             }
         }
@@ -169,6 +221,11 @@ namespace EquivalentExchange
         private void OnLevelMessage(IncomingMessage msg)
         {
             PlayerData.AlchemyLevel[msg.FarmerID] = msg.Reader.ReadInt32();
+        }
+
+        private void OnSlimeGivenToWizardMessage(IncomingMessage msg)
+        {
+            PlayerData.IsSlimeGivenToWizard[msg.FarmerID] = msg.Reader.ReadBoolean();
         }
 
         private void OnExpMessage(IncomingMessage msg)
@@ -230,6 +287,13 @@ namespace EquivalentExchange
                 int totalValueTransmuted = msg.Reader.ReadInt32();
                 PlayerData.TotalValueTransmuted[id] = totalValueTransmuted;
             }
+
+            for (int i = 0; i < count; ++i)
+            {
+                long id = msg.Reader.ReadInt64();
+                bool isSlimeGivenToWizard = msg.Reader.ReadBoolean();
+                PlayerData.IsSlimeGivenToWizard[id] = isSlimeGivenToWizard;
+            }
         }
 
         static int lastTickTime = 0;  // The time at the last tick processed.
@@ -283,10 +347,10 @@ namespace EquivalentExchange
 
         private static void DoRegenTick()
         {
-            // handles this player's regen
+            // handles this player's regen, super nerfed.
             double regenAlchemyBar = Math.Sqrt(AlchemyLevel + 1) / 10D;
-            regenAlchemyBar *= MaxEnergy / 200D;
-            CurrentEnergy = (float)Math.Min(CurrentEnergy + Math.Max(0.05D, regenAlchemyBar), MaxEnergy);
+            regenAlchemyBar *= MaxEnergy / 600D;
+            CurrentEnergy = (float)Math.Min(CurrentEnergy + Math.Max(0.01D, regenAlchemyBar), MaxEnergy);
         }
 
         public static SaveDataModel PlayerData
@@ -367,6 +431,30 @@ namespace EquivalentExchange
             }
         }
 
+        public static bool IsSlimeGivenToWizard
+        {
+            get
+            {
+                if (!PlayerData.IsSlimeGivenToWizard.ContainsKey(PlayerId))
+                    return false;
+                // Log.debug($"Current value transmuted is {PlayerData.TotalValueTransmuted[PlayerId]}");
+                return PlayerData.IsSlimeGivenToWizard[PlayerId];
+            }
+            set
+            {
+                if (!PlayerData.IsSlimeGivenToWizard.ContainsKey(PlayerId) || PlayerData.IsSlimeGivenToWizard[PlayerId] != value)
+                {
+                    PlayerData.IsSlimeGivenToWizard[PlayerId] = value;
+                    using (var stream = new MemoryStream())
+                    using (var writer = new BinaryWriter(stream))
+                    {
+                        writer.Write(value);
+                        Networking.BroadcastMessage(MSG_IS_SLIME_GIVEN_TO_WIZARD, stream.ToArray());
+                    }
+                }
+            }
+        }
+
         public static long PlayerId
         {
             get { return Game1.player.uniqueMultiplayerID; }
@@ -375,8 +463,8 @@ namespace EquivalentExchange
         public static void AddTotalValueTransmuted(int value)
         {
             TotalValueTransmuted += value;
-            // Extremely nerfed formula for alchemy energy training.
-            var updatedMaxEnergy = (int)Math.Floor(Math.Pow(TotalValueTransmuted / 5, 0.6)) + (AlchemyLevel * 25);
+            // Buffed formula for alchemy energy training. You start with 100 at a minimum.
+            var updatedMaxEnergy = (int)Math.Floor(Math.Pow(TotalValueTransmuted / 5, 0.6)) + (AlchemyLevel * 25) + 100;
             MaxEnergy = updatedMaxEnergy;
         }
 
@@ -405,16 +493,6 @@ namespace EquivalentExchange
 
             // Detect (heuristically) whether the player gave the wizard a slime ball. This is the gateway for the rest of the mod.
             HandleWizardSlimeListener();
-        }
-
-
-        // there are two states we need to preserve. 
-        // The first is whether the player gave the wizard a slime.        
-        // The second is whether the player has unlocked their alchemy ability.
-        // In between those, we can infer that the player hasn't seen the dialog.
-        private void HandleWizardSlimeListener()
-        {
-
         }
 
         private void HandleHeldTransmuteKeysUpdateTick()
@@ -515,7 +593,11 @@ namespace EquivalentExchange
                 }
             }
 
-            foreach(var recipe in recipes)
+            // a special handler for hay to and from fiber - unfortunately hay has a value of 0 so it breaks.
+            //recipes.AddRecipeLink(Reference.Items.Hay, Reference.Items.Fiber);
+            //recipes.AddRecipeLink(Reference.Items.Fiber, Reference.Items.Hay);
+
+            foreach (var recipe in recipes)
             {
                 var inputName = Util.GetItemName(recipe.InputId);
                 var inputValue = Util.GetItemValue(recipe.InputId);
@@ -558,6 +640,8 @@ namespace EquivalentExchange
                     PlayerData.AlkahestryMaxEnergy[farmerId] = 0F;
                 if (!PlayerData.TotalValueTransmuted.ContainsKey(farmerId))
                     PlayerData.TotalValueTransmuted[farmerId] = 0;
+                if (!PlayerData.IsSlimeGivenToWizard.ContainsKey(farmerId))
+                    PlayerData.IsSlimeGivenToWizard[farmerId] = false;
 
                 // clean up deprecated profession data and use the new profession hooks
                 ProfessionHelper.CleanDeprecatedProfessions();
@@ -589,12 +673,16 @@ namespace EquivalentExchange
             if (!Context.IsWorldReady)
                 return;
 
-            //one of these counts as true whenever the player is in the bus stop...
+            // one of these counts as true whenever the player is in the bus stop...
             if (Game1.eventUp)
                 return;
 
-            //per the advice of Ento, abort if the player is in an event
+            // per the advice of Ento, abort if the player is in an event
             if (Game1.CurrentEvent != null)
+                return;
+
+            // if the player hasn't unlocked alchemy, skip
+            if (!IsSlimeGivenToWizard)
                 return;
 
             RenderAlchemyBarToHUD();
@@ -653,6 +741,82 @@ namespace EquivalentExchange
                     Game1.spriteBatch.DrawString(Game1.dialogueFont, alkahestryEnergyString, alkahestryEnergyStringPosition, Color.White);
                 }
             }
+
+            // if the player is holding a transmutable item, let's show the current recipe, if it's available.
+
+            //get the player's current item
+            Item heldItem = Game1.player.CurrentItem;
+
+            //player is holding item
+            if (heldItem != null)
+            {
+                //get the item's ID
+                int heldItemID = heldItem.parentSheetIndex;
+                //abort any transmutation event for blacklisted items or items that for whatever reason can't exist in world.
+                if (!GetTransmutationFormulas().HasItem(heldItemID))
+                {
+                    return;
+                }                
+
+                // get a list of recipes, valid or not, for the item we're holding
+                var recipes = GetTransmutationFormulas().GetRecipesForOutput(heldItemID);
+
+                // get an initial sprite position for the recipe list origin (top left) point
+                var startingRecipeSpritePosition = new Vector2(alchemyBarPositionX - (136), alchemyBarPositionY);
+
+                // loop over recipes, for displaying them in sequence
+                // we "throttle" the max number of recipes we can iterate over (this list is sorted by validity!)
+                // to avoid drawing off screen. At most it can draw as many as fits "in the alchemy bar's height"
+                for (int i = 0; i < Math.Min(recipes.Count, (int)Math.Floor(alchemyBarHeight / 62D)); i++)
+                {
+                    // originally column index was intended to let recipes display two by two (or more)
+                    // it made a mess so I scrapped it.
+                    var columnIndex = 0;
+
+                    // row index is just the index of the recipe, this one is still used.
+                    var rowIndex = i;
+
+                    // get the draw position offsets for the first item
+                    var xOffset = (int)Math.Floor(columnIndex * -98D);
+                    var yOffset = (int)Math.Floor(rowIndex * 62D);
+
+                    // turn them into a vector
+                    var bestRecipeSpritePosition = new Vector2(startingRecipeSpritePosition.X + xOffset, startingRecipeSpritePosition.Y + yOffset);                    
+
+                    // fetch the recipe
+                    var bestRecipe = recipes[i];                    
+
+                    // display the current recipe beside the alchemy bar
+
+                    // fetch the input item as an object representing the input and quantity desired by this recipe
+                    Item inputItem = new StardewValley.Object(bestRecipe.InputId, bestRecipe.GetInputCost(), false);
+
+                    // figure out if the player has the necessary inputs for this recipe
+                    var hasInputs = Game1.player.hasItemInInventory(inputItem.parentSheetIndex, inputItem.Stack + 1);
+
+                    // set the transparency of the renderer based on whether inputs are present, this is just visual flare.
+                    var transparencyBasedOnValidity = hasInputs ? 1.0F : 0.5F;
+
+                    // calls the vanilla menu item display code, it's perfect for this
+                    inputItem.drawInMenu(Game1.spriteBatch, bestRecipeSpritePosition, 0.92F, transparencyBasedOnValidity, 0.875F, true, Color.White, false);
+
+                    // create a font vector for the tiny arrow we draw pointing from left to right between the items. This is just visual flare.
+                    // this hard-coded vector offset puts the arrow directly to the right of the quantity of the input, pointing right toward the output #
+                    var fontVector = new Vector2(bestRecipeSpritePosition.X + 71, bestRecipeSpritePosition.Y + 44);
+
+                    // draw the arrow at 0.7 scale of a normal dialogue font, we want it about the same size as the numbers... for visual flare.
+                    Game1.spriteBatch.DrawString(Game1.dialogueFont, ">", fontVector, Color.White, 0F, new Vector2(0, 0), 0.70F, SpriteEffects.None, 0.89F);
+
+                    // now get the vector for the output item
+                    var outputRecipeSpritePosition = new Vector2(bestRecipeSpritePosition.X + 65, bestRecipeSpritePosition.Y);
+
+                    // fetch the output item as an object representing the output and quantity produced by this recipe
+                    Item outputItem = new StardewValley.Object(heldItemID, bestRecipe.GetOutputQuantity() + 1, false);
+
+                    // finally, draw the output item
+                    outputItem.drawInMenu(Game1.spriteBatch, outputRecipeSpritePosition, 0.92F, transparencyBasedOnValidity, 0.875F, true, Color.White, false);
+                }                
+            }
         }
 
         private static bool brokeRepeaterDueToNoEnergy = false;
@@ -680,6 +844,10 @@ namespace EquivalentExchange
         //handles the key press event for figuring out if control or shift is held down, or either of the mod's major transmutation actions is being attempted.
         public static void ControlEvents_KeyPressed(object sender, EventArgsKeyPressed e)
         {
+            // if the player hasn't unlocked the secrets yet, abort
+            if (!IsSlimeGivenToWizard)
+                return;
+
             //let the app know the shift key is held
             if (e.KeyPressed == leftShiftKey || e.KeyPressed == rightShiftKey)
                 SetModifyingControlKeyState(e.KeyPressed, true);
@@ -739,6 +907,13 @@ namespace EquivalentExchange
                             }
                         }
 
+                        //try to normalize the item [make all items of a different quality one quality and exchange any remainder for gold]
+                        if (keyPressed.ToString() == instance.Config.NormalizeKey)
+                        {
+                            Alchemy.HandleNormalizeEvent(heldItem);
+                            return;
+                        }
+
                         //abort any transmutation event for blacklisted items or items that for whatever reason can't exist in world.
                         if (!GetTransmutationFormulas().HasItem(heldItemID) || !heldItem.canBeDropped())
                         {
@@ -758,12 +933,6 @@ namespace EquivalentExchange
                                 instance.heldCounter = 1;
                                 instance.updateTickCount = AUTO_REPEAT_UPDATE_RATE_REFRESH * 2;
                             }
-                        }
-
-                        //try to normalize the item [make all items of a different quality one quality and exchange any remainder for gold]
-                        if (keyPressed.ToString() == instance.Config.NormalizeKey)
-                        {
-                            Alchemy.HandleNormalizeEvent(heldItem, actualValue);
                         }
                     }
                 }

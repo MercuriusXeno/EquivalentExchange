@@ -10,7 +10,7 @@ namespace EquivalentExchange.Models
 
         public ConfigurationModel()
         {
-            TransmuteKey = Keys.T.ToString();
+            TransmuteKey = Keys.V.ToString();
             NormalizeKey = Keys.N.ToString();
             DisableRecipeItems = false;
         }

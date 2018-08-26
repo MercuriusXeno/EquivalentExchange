@@ -90,12 +90,12 @@ namespace EquivalentExchange
         {
             var infoList = new List<string>
             {
-                EquivalentExchange.instance.Helper.Translation.Get("LevelUp"),
-                EquivalentExchange.instance.Helper.Translation.Get("LevelUp2")
+                EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.LevelUp),
+                EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.LevelUp2)
             };
             if (level % 2 == 0)
             {
-                infoList.Add(EquivalentExchange.instance.Helper.Translation.Get("LevelUpEven"));
+                infoList.Add(EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.LevelUpEven));
             }
 
             return infoList;
@@ -103,8 +103,8 @@ namespace EquivalentExchange
 
         public override string GetSkillPageHoverText(int level)
         {
-            var hoverTextString1 = EquivalentExchange.instance.Helper.Translation.Get("SkillHoverText1", new { energy = $"{(level * 10)}" });
-            var hoverTextString2 = EquivalentExchange.instance.Helper.Translation.Get("SkillHoverText2", new { efficiency = $"{(level / 2)}" });
+            var hoverTextString1 = EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.SkillHoverText1, new { energy = $"{(level * 10)}" });
+            var hoverTextString2 = EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.SkillHoverText2, new { efficiency = $"{(level / 2)}" });
             return hoverTextString1 + Environment.NewLine + hoverTextString2;
         }
     }

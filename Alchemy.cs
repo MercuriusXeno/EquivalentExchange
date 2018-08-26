@@ -116,14 +116,10 @@ namespace EquivalentExchange
             EquivalentExchange.CurrentEnergy = EquivalentExchange.MaxEnergy;
         }
 
-        public static void HandleNormalizeEvent(Item heldItem, int actualValue)
+        public static void HandleNormalizeEvent(Item heldItem)
         {
             //get the id of the item the player is holding
             int itemId = heldItem.parentSheetIndex;
-
-            //if it's a blacklisted item, abort.
-            if (!EquivalentExchange.GetTransmutationFormulas().HasItem(itemId))
-                return;
 
             //declare vars to remember how many items of each quality the player has.
             float normalQuality = 0;
@@ -253,7 +249,7 @@ namespace EquivalentExchange
                         //don't break stumps unless the player is in precision mode.
                         if (terrainFeature is Tree && isAxe && (!(terrainFeature as Tree).stump || EquivalentExchange.IsShiftKeyPressed()))
                         {
-                            var snapshotPlayerExperience = Game1.player.experiencePoints;
+                            Netcode.NetArray<int, Netcode.NetInt> snapshotPlayerExperience = Game1.player.experiencePoints;
                             //trees get removed automatically
                             performedAction = DoToolFunction(location, Game1.player, tool, (int)offsetPosition.X, (int)offsetPosition.Y);
                             RestorePlayerExperience(snapshotPlayerExperience);
@@ -605,7 +601,7 @@ namespace EquivalentExchange
 
         private static double GetToolTransmutationStaminaCost(double level, float cost)
         {
-            double reduction = Math.Floor(level / 2D);
+            double reduction = Math.Pow(Math.Floor(level / 2D), 1.3);
             return cost / reduction;
         }
 

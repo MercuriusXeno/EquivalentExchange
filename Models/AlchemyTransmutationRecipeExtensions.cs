@@ -1,4 +1,5 @@
-﻿using System;
+﻿using StardewValley;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -23,6 +24,12 @@ namespace EquivalentExchange.Models
             filteredRecipes.Sort((x, y) => {
                 var comp = Util.GetItemValue(x.InputId) - Util.GetItemValue(y.InputId);            
                 return comp;
+            });
+            // sort by whether the player has items
+            filteredRecipes.Sort((x, y) => {
+                var hasX = Game1.player.hasItemInInventory(x.InputId, x.GetInputCost() + 1) ? 0 : 1;
+                var hasY = Game1.player.hasItemInInventory(y.InputId, y.GetInputCost() + 1) ? 0 : 1;
+                return hasX - hasY;
             });
             return filteredRecipes;
         }

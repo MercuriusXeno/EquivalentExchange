@@ -148,17 +148,17 @@ namespace EquivalentExchange
             switch (whichProfession)
             {
                 case ProfessionHelper.OldShaperId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("Shaper") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.Shaper) }";
                 case ProfessionHelper.OldSageId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("Sage") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.Sage) }";
                 case ProfessionHelper.OldTransmuterId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("Transmuter") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.Transmuter) }";
                 case ProfessionHelper.OldAdeptId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("Adept") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.Adept) }";
                 case ProfessionHelper.OldAurumancerId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("Aurumancer") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.Aurumancer) }";
                 case ProfessionHelper.OldConduitId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("Conduit") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.Conduit) }";
                 default:
                     return null;
             }
@@ -169,17 +169,17 @@ namespace EquivalentExchange
             switch (whichProfession)
             {
                 case ProfessionHelper.OldShaperId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("ShaperDescription") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.ShaperDescription) }";
                 case ProfessionHelper.OldSageId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("SageDescription") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.SageDescription) }";
                 case ProfessionHelper.OldTransmuterId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("TransmuterDescription") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.TransmuterDescription) }";
                 case ProfessionHelper.OldAdeptId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("AdeptDescription") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.AdeptDescription) }";
                 case ProfessionHelper.OldAurumancerId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("AurumancerDescription") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.AurumancerDescription) }";
                 case ProfessionHelper.OldConduitId:
-                    return $"{ EquivalentExchange.instance.Helper.Translation.Get("ConduitDescription") }";
+                    return $"{ EquivalentExchange.instance.Helper.Translation.Get(Reference.Localizations.ConduitDescription) }";
             }
             return "";
         }

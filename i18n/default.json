@@ -1,6 +1,7 @@
 ﻿{    
     "Level": "Level",
     "Alchemy": "Alchemy",
+	"Needs": "Needs",
     "LevelUp": "Energy limit increased by 25.",
 	"LevelUp2": "Regeneration rate increased.",
 	"LevelUpEven": "+1 Tool transmutation efficiency",
@@ -19,5 +20,7 @@
 	"Aurumancer": "Aurumancer",
     "AurumancerDescription": "Gold ore can be transmuted to and from slime.",
 	"Conduit": "Conduit",
-    "ConduitDescription": "You can transmute slime into resources, at 2x energy cost."
+    "ConduitDescription": "You can transmute slime into resources, at 2x energy cost.",	
+    "WizardSpeech": "Sorry if I seem a bit irritated. You see, slime can be useful for alchemy, but it takes practice and has limits. Let me show you how it's done. Mind your energy, though. If you run out, you'll start to get tired.",
+	"AlchemyUnlocked": "The wizard revealed basic alchemy! Hold basic resources like wood or stone. Recipes appear by your energy bar. Pressing {{transmuteKey}} will create them from available materials (the top recipe shown is the recipe used). Pressing {{normalizeKey}} will turn all of the higher quality versions of an item you're holding into normal items, based on their value. Remainders, however, are lost."
 }

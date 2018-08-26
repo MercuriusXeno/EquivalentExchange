@@ -13,6 +13,8 @@ namespace EquivalentExchange
         public Dictionary<long, float> AlkahestryMaxEnergy { get; set; }
         public Dictionary<long, float> AlkahestryCurrentEnergy { get; set; }
         public Dictionary<long, int> TotalValueTransmuted { get; set; }        
+        public Dictionary<long, bool> IsSlimeGivenToWizard { get; set; }
+
 
         public SaveDataModel()
         {            
@@ -21,6 +23,8 @@ namespace EquivalentExchange
             AlkahestryMaxEnergy = new Dictionary<long, float>();
             AlkahestryCurrentEnergy = new Dictionary<long, float>();
             TotalValueTransmuted = new Dictionary<long, int>();
+            IsSlimeGivenToWizard = new Dictionary<long, bool>();
+
         }        
     }
 }
